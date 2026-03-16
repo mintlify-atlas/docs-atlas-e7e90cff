@@ -1,0 +1,126 @@
+{
+  "projectType": "saas",
+  "projectName": "CanAccesible",
+  "projectDescription": "A community-driven web platform for the Canary Islands that empowers citizens to report and interact with accessibility incidents, visualize them on an interactive map, and collaborate to improve accessibility across the archipelago.",
+  "theme": "almond",
+  "primaryColor": "#2563EB",
+  "lightColor": "#EFF6FF",
+  "darkColor": "#1E3A8A",
+  "navigation": {
+    "tabs": [
+      {
+        "tab": "Documentation",
+        "groups": [
+          {
+            "group": "Overview",
+            "pages": ["introduction", "technologies"]
+          },
+          {
+            "group": "Getting Started",
+            "pages": ["getting-started/prerequisites", "getting-started/installation", "getting-started/configuration"]
+          },
+          {
+            "group": "Core Features",
+            "pages": [
+              "features/incidents",
+              "features/map",
+              "features/blog",
+              "features/notifications",
+              "features/chat",
+              "features/user-dashboard"
+            ]
+          },
+          {
+            "group": "Architecture",
+            "pages": ["architecture/overview", "architecture/diagrams", "architecture/tech-stack"]
+          }
+        ]
+      },
+      {
+        "tab": "API Reference",
+        "groups": [
+          {
+            "group": "Authentication",
+            "pages": ["api/auth"]
+          },
+          {
+            "group": "Resources",
+            "pages": [
+              "api/users",
+              "api/incidents",
+              "api/incident-comments",
+              "api/incident-likes",
+              "api/incident-follows",
+              "api/blog-articles",
+              "api/conversations",
+              "api/notifications",
+              "api/push-subscriptions"
+            ]
+          }
+        ]
+      },
+      {
+        "tab": "Operations",
+        "groups": [
+          {
+            "group": "Deployment",
+            "pages": ["ops/deployment", "ops/domain-dns", "ops/logging"]
+          },
+          {
+            "group": "Security",
+            "pages": ["ops/security", "ops/ldap-setup"]
+          },
+          {
+            "group": "Development",
+            "pages": ["ops/npm-scripts", "ops/testing-backend", "ops/testing-frontend", "ops/workflow"]
+          }
+        ]
+      }
+    ]
+  },
+  "keyFeatures": [
+    "Community incident reporting for accessibility barriers and good practices",
+    "Interactive map visualization of all reported incidents using Leaflet",
+    "Real-time chat with administrators via Socket.io",
+    "Web Push Notifications with VAPID authentication for live updates",
+    "User dashboard to manage personal incident reports",
+    "Blog for accessibility news and updates in the Canary Islands",
+    "JWT and session-based dual authentication system",
+    "OpenLDAP integration for centralized user directory and password management",
+    "Admin dashboard (EJS) for platform management",
+    "Multi-language support with react-i18next and MyMemory translation API",
+    "Image uploads to DigitalOcean Spaces (S3-compatible storage)",
+    "Email notifications via Resend API"
+  ],
+  "publicApiSurface": [
+    "POST /api/auth/signin",
+    "POST /api/auth/logout",
+    "POST /api/auth/forgot-password",
+    "POST /api/auth/reset-password",
+    "POST /api/auth/change-password",
+    "GET /api/auth/me",
+    "GET /api/incidents",
+    "POST /api/incidents",
+    "GET /api/incidents/:id",
+    "PUT /api/incidents/:id",
+    "DELETE /api/incidents/:id",
+    "GET /api/incidents/my-incidents",
+    "GET /api/users",
+    "POST /api/users",
+    "GET /api/users/:id",
+    "PUT /api/users/:id",
+    "DELETE /api/users/:id",
+    "GET /api/incident-comments",
+    "POST /api/incident-comments",
+    "GET /api/incident-likes",
+    "POST /api/incident-likes",
+    "GET /api/incident-follows",
+    "POST /api/incident-follows",
+    "GET /api/blog-articles",
+    "POST /api/blog-articles",
+    "GET /api/conversations",
+    "POST /api/conversations",
+    "GET /api/notifications",
+    "POST /api/push-subscriptions"
+  ]
+}
