@@ -1,0 +1,222 @@
+---
+title: "Notifications"
+description: "In-app notifications generated automatically by platform events such as sign-in, incident creation, comments, and messages. All endpoints are scoped to the authenticated user."
+---
+
+
+## Overview
+
+Notifications are created internally by the backend whenever significant events occur (e.g., a new comment on a followed incident, a login detected, a new conversation message). The `entity` field identifies what triggered the notification and `entityId` points to the relevant record.
+
+| `entity` value | Trigger |
+|----------------|---------|
+| `User` | Login detected, account changes |
+| `Incident` | Incident submitted for review |
+| `IncidentComment` | New comment on an incident |
+| `IncidentLike` | Incident liked |
+| `IncidentFollow` | Incident followed |
+| `Blog` | New blog article published |
+| `Conversation` | New conversation opened |
+| `ConversationMessage` | New message in a conversation |
+
+<Note>
+All notification endpoints are protected by `verifyToken`. Notifications are always scoped to the authenticated user — you can only read, update, or delete your own notifications.
+</Note>
+
+---
+
+## POST /api/notifications
+
+Manually create a notification. This is primarily used internally by other controllers but is exposed as a protected endpoint.
+
+**Auth:** `verifyToken`
+
+### Request body
+
+<ParamField body="userId" type="integer">
+  Target user ID. Defaults to the authenticated user if not provided.
+</ParamField>
+
+<ParamField body="entity" type="string" required>
+  Entity type that triggered the notification. Must be one of the enum values listed in the overview table.
+</ParamField>
+
+<ParamField body="entityId" type="integer" required>
+  ID of the entity record that triggered the notification.
+</ParamField>
+
+<ParamField body="message" type="string" required>
+  Human-readable notification text.
+</ParamField>
+
+<ParamField body="dateNotification" type="string">
+  Date in `YYYY-MM-DD` format. Defaults to today.
+</ParamField>
+
+### Response `201`
+
+<ResponseField name="id" type="integer">Notification ID.</ResponseField>
+<ResponseField name="userId" type="integer">Recipient user ID.</ResponseField>
+<ResponseField name="entity" type="string">Entity type.</ResponseField>
+<ResponseField name="entityId" type="integer">Entity record ID.</ResponseField>
+<ResponseField name="message" type="string">Notification message text.</ResponseField>
+<ResponseField name="dateNotification" type="string">Notification date (YYYY-MM-DD).</ResponseField>
+
+### Example
+
+```bash
+curl -X POST https://canaccesible.es/api/notifications \
+  -H "Authorization: Bearer eyJhbGci..." \
+  -H "Content-Type: application/json" \
+  -d '{
+    "entity": "Incident",
+    "entityId": 17,
+    "message": "La incidencia ha sido resuelta."
+  }'
+```
+
+### Errors
+
+| Status | Message |
+|--------|---------|
+| `400` | `userId is required` / `entity is required` / `entityId is required` / `message is required` |
+| `403` | `Token not provided.` |
+
+---
+
+## GET /api/notifications
+
+Retrieve all notifications for the authenticated user, ordered newest first.
+
+**Auth:** `verifyToken`
+
+### Response `200`
+
+Array of notification objects.
+
+### Example
+
+```bash
+curl https://canaccesible.es/api/notifications \
+  -H "Authorization: Bearer eyJhbGci..."
+```
+
+```json
+[
+  {
+    "id": 101,
+    "userId": 42,
+    "entity": "User",
+    "entityId": 42,
+    "message": "Login detected on your account",
+    "dateNotification": "2025-06-10",
+    "createdAt": "2025-06-10T09:00:00.000Z",
+    "updatedAt": "2025-06-10T09:00:00.000Z"
+  }
+]
+```
+
+---
+
+## GET /api/notifications/:id
+
+Retrieve a single notification by ID. Returns `404` if the notification exists but belongs to a different user.
+
+**Auth:** `verifyToken`
+
+### Path parameters
+
+<ParamField path="id" type="integer" required>
+  ID of the notification.
+</ParamField>
+
+### Response `200`
+
+A single notification object.
+
+### Example
+
+```bash
+curl https://canaccesible.es/api/notifications/101 \
+  -H "Authorization: Bearer eyJhbGci..."
+```
+
+### Errors
+
+| Status | Message |
+|--------|---------|
+| `404` | `Notification not found.` |
+
+---
+
+## PUT /api/notifications/:id
+
+Update a notification record. Typically used to mark a notification as read by adding a custom field, or to update `dateNotification`. The request body is passed directly to the Sequelize update call — send only the fields you want to change.
+
+**Auth:** `verifyToken`
+
+### Path parameters
+
+<ParamField path="id" type="integer" required>
+  ID of the notification to update.
+</ParamField>
+
+### Request body
+
+Any writable notification field, for example:
+
+```json
+{ "message": "Mensaje actualizado." }
+```
+
+### Response `200`
+
+The updated notification object.
+
+### Example
+
+```bash
+curl -X PUT https://canaccesible.es/api/notifications/101 \
+  -H "Authorization: Bearer eyJhbGci..." \
+  -H "Content-Type: application/json" \
+  -d '{"message": "Leída"}'
+```
+
+### Errors
+
+| Status | Message |
+|--------|---------|
+| `404` | `Notification not found.` |
+
+---
+
+## DELETE /api/notifications/:id
+
+Delete a notification. Returns `404` if the notification belongs to a different user.
+
+**Auth:** `verifyToken`
+
+### Path parameters
+
+<ParamField path="id" type="integer" required>
+  ID of the notification to delete.
+</ParamField>
+
+### Response `200`
+
+```json
+{ "message": "Notification deleted successfully." }
+```
+
+### Example
+
+```bash
+curl -X DELETE https://canaccesible.es/api/notifications/101 \
+  -H "Authorization: Bearer eyJhbGci..."
+```
+
+### Errors
+
+| Status | Message |
+|--------|---------|
+| `404` | `Notification not found.` |

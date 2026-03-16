@@ -1,0 +1,207 @@
+---
+title: "Incident reporting"
+description: "Report accessibility barriers and good practices across the Canary Islands, and engage with the community through likes, comments, and follows."
+---
+
+Incidents are the core of CanAccesible. Every registered user can document accessibility situations they encounter — whether a barrier that makes a space harder to use, or a good practice worth celebrating — and submit it for admin review before it goes live.
+
+## Incident types
+
+<CardGroup cols={2}>
+  <Card title="Good practice" icon="circle-check">
+    A `buena_practica` incident highlights an example of accessible design done well: a ramp, audible crossing signal, or well-marked tactile path.
+  </Card>
+  <Card title="Bad practice" icon="circle-xmark">
+    A `mala_practica` incident reports an accessibility barrier: a broken lift, missing handrail, or obstructed wheelchair route. Severity (`baja`, `media`, `alta`) is required for bad practices.
+  </Card>
+</CardGroup>
+
+## Incident fields
+
+Every incident is stored in the `Incidents` table with the following fields:
+
+| Field | Type | Required | Notes |
+|---|---|---|---|
+| `name` | string | Yes | Short title for the incident |
+| `description` | text | Yes | Full description of what was observed |
+| `incidentTypeId` | integer | Yes | `1` = good practice, `2` = bad practice |
+| `incidentStatusId` | integer | Yes | `1` pending, `2` in progress, `3` resolved |
+| `incidentSeverityId` | integer | No | `1` low, `2` medium, `3` high — only for bad practices |
+| `island` | enum | Yes | One of the seven Canary Islands |
+| `area` | enum | Yes | Accessibility area: `movilidad`, `sensorial`, `arquitectura`, `transporte`, `otro` |
+| `latitude` / `longitude` | decimal | Yes | Geographic coordinates (used for the map) |
+| `address` | string | No | Human-readable address |
+| `dateIncident` | date | No | Date the incident occurred |
+| `image` | file | Yes | Photo of the incident (uploaded via `multipart/form-data`) |
+| `isApproved` | boolean | — | Set by admins; defaults to `false` |
+
+<Note>
+New incidents are not publicly visible until an admin sets `isApproved` to `true`. You receive a confirmation toast when your report is submitted for review.
+</Note>
+
+## Supported islands
+
+The `island` field accepts exactly these values:
+
+```
+Gran Canaria · Tenerife · La Gomera · Lanzarote · Fuerteventura · El Hierro · La Palma
+```
+
+## Creating an incident
+
+<Steps>
+  <Step title="Sign in">
+    You must be authenticated. If you are not logged in, clicking **New incident** redirects you to the registration page.
+  </Step>
+  <Step title="Open the form">
+    On the `/incidents` page, click **New incident**. A modal dialog opens with the `IncidentForm` component.
+  </Step>
+  <Step title="Fill in the details">
+    Enter a name, description, select the island and area, choose the type (good or bad practice), and pick a date.
+  </Step>
+  <Step title="Pin the location">
+    The form captures `latitude` and `longitude`. The Nominatim API is used in the map view to convert coordinates back to a readable address.
+  </Step>
+  <Step title="Attach a photo">
+    Upload an image file. Images are sent as `multipart/form-data` using the `image` field name and stored via DigitalOcean Spaces.
+  </Step>
+  <Step title="Submit">
+    Click **Submit**. The incident is created with `isApproved: false` and enters the admin review queue.
+  </Step>
+</Steps>
+
+## API endpoints
+
+### Incidents
+
+| Method | Endpoint | Auth | Description |
+|---|---|---|---|
+| `POST` | `/api/incidents` | Required | Create a new incident |
+| `GET` | `/api/incidents` | None | Retrieve all incidents |
+| `GET` | `/api/incidents/my-incidents` | JWT only | Retrieve the current user's incidents |
+| `GET` | `/api/incidents/:id` | None | Retrieve a single incident |
+| `PUT` | `/api/incidents/:id` | Required | Update an incident |
+| `DELETE` | `/api/incidents/:id` | Required | Delete an incident |
+
+<Info>
+Create, update, and delete operations require either a JWT Bearer token or an active session (`verifyTokenOrSession`). `GET /api/incidents/my-incidents` requires a JWT token specifically (`verifyToken`).
+</Info>
+
+### Comments
+
+| Method | Endpoint | Auth | Description |
+|---|---|---|---|
+| `POST` | `/api/incident-comments` | Required | Post a comment |
+| `GET` | `/api/incident-comments/incident/:incidentId` | None | Get all comments for an incident |
+| `GET` | `/api/incident-comments/:id` | None | Get a single comment |
+| `PUT` | `/api/incident-comments/:id` | Required | Edit a comment |
+| `DELETE` | `/api/incident-comments/:id` | Required | Delete a comment |
+
+### Likes
+
+| Method | Endpoint | Auth | Description |
+|---|---|---|---|
+| `POST` | `/api/incidentLikes` | JWT | Like an incident |
+| `GET` | `/api/incidentLikes` | None | Get all likes |
+| `GET` | `/api/incidentLikes/incident/:incidentId/user/:userId` | None | Check if a user liked an incident |
+| `DELETE` | `/api/incidentLikes/:id` | JWT | Remove a like |
+
+### Follows
+
+| Method | Endpoint | Auth | Description |
+|---|---|---|---|
+| `POST` | `/api/incidentFollows` | JWT | Follow an incident |
+| `GET` | `/api/incidentFollows/incident/:incidentId` | None | Get all followers of an incident |
+| `GET` | `/api/incidentFollows/incident/:incidentId/user/:userId` | None | Check if a user follows an incident |
+| `DELETE` | `/api/incidentFollows/:id` | JWT | Unfollow an incident |
+
+## Example: submit an incident
+
+Send a `multipart/form-data` POST request with a JWT Bearer token:
+
+```bash
+curl -X POST https://canaccesible.es/api/incidents \
+  -H "Authorization: Bearer <your_jwt_token>" \
+  -F "name=Ramp without guardrail" \
+  -F "description=The ramp on Calle Mayor has no side guardrail, making it unsafe for wheelchair users." \
+  -F "incidentTypeId=2" \
+  -F "incidentStatusId=1" \
+  -F "incidentSeverityId=2" \
+  -F "island=Gran Canaria" \
+  -F "area=arquitectura" \
+  -F "latitude=28.12341234" \
+  -F "longitude=-15.43214321" \
+  -F "dateIncident=2026-03-16" \
+  -F "userId=42" \
+  -F "image=@/path/to/photo.jpg"
+```
+
+A successful response returns the created incident object including its assigned `id` and `isApproved: false`.
+
+## Community interactions
+
+<Tabs>
+  <Tab title="Likes">
+    Any authenticated user can like an incident. Liking is a toggle: if a like record already exists for the `(incidentId, userId)` pair it is deleted, otherwise a new `IncidentLike` is created. The like count updates in real time on the detail page via the `incident:likes_update` Socket.io event.
+
+    ```js
+    // incidentLikesService.js
+    export const createIncidentLike = (incidentLikeData) =>
+      api.post("/incidentLikes", incidentLikeData).then((res) => res.data);
+
+    export const deleteIncidentLike = (id) =>
+      api.delete(`/incidentLikes/${id}`).then((res) => res.data);
+    ```
+  </Tab>
+  <Tab title="Comments">
+    Authenticated users can add, edit, and delete comments. Each `IncidentComment` stores `incidentId`, `userId`, `comment` text, and a `dateComment` timestamp.
+
+    ```js
+    // incidentCommentService.js
+    POST /api/incident-comments
+    Body: { incidentId, userId, comment }
+    ```
+  </Tab>
+  <Tab title="Follows">
+    Following an incident subscribes you to update notifications. When the incident owner saves an edit, a notification is created for each follower:
+
+    ```js
+    // From Incident.jsx — called after every update
+    const followers = await getIncidentFollowsByIncidentId(updatedIncidentId);
+    for (const follower of followers) {
+      await createNotification({
+        userId: follower.userId,
+        message: `Incident updated: ${formData.name}`,
+        entity: "IncidentFollow",
+        entityId: updatedIncidentId,
+        dateNotification: new Date().toISOString().split("T")[0],
+      });
+    }
+    ```
+  </Tab>
+</Tabs>
+
+## Editing and deleting
+
+You can edit or delete only incidents you own (ownership is enforced server-side). From the incident list, click the **Edit** icon to reopen the `IncidentForm` pre-populated with the existing data, make your changes, and save. Followers receive a notification automatically when you save an edit.
+
+<Warning>
+Deleting an incident is permanent. All associated comments, likes, and follows are removed along with it.
+</Warning>
+
+## Frequently asked questions
+
+<AccordionGroup>
+  <Accordion title="Why is my incident not appearing on the map or list?">
+    New incidents require admin approval before they are publicly visible. Your incident will appear once an admin sets `isApproved` to `true`.
+  </Accordion>
+  <Accordion title="What happens when I follow an incident?">
+    An `IncidentFollow` record is created linking your user ID to the incident. Any time the incident author saves an update you receive an in-app notification.
+  </Accordion>
+  <Accordion title="Can I report the same location twice?">
+    Yes. There is no duplicate-location constraint. If conditions have changed or you want to add additional context, submit a new incident.
+  </Accordion>
+  <Accordion title="Which image formats are accepted?">
+    The backend uses Multer for upload handling. Common formats (JPEG, PNG, WebP) are supported. Images are stored in DigitalOcean Spaces.
+  </Accordion>
+</AccordionGroup>

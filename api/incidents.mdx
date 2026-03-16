@@ -1,0 +1,306 @@
+---
+title: "Incidents"
+description: "Create, browse, update, and delete accessibility incidents reported across the Canary Islands. Incidents reference lookup tables for status, type, and severity."
+---
+
+
+## Reference values
+
+| Field | Values |
+|-------|--------|
+| `island` | `Gran Canaria`, `Tenerife`, `La Gomera`, `Lanzarote`, `Fuerteventura`, `El Hierro`, `La Palma` |
+| `area` | `movilidad`, `sensorial`, `arquitectura`, `transporte`, `otro` |
+| `incidentTypeId` | `1` = `buena_practica`, `2` = `mala_practica` |
+| `incidentStatusId` | `1` = `pendiente`, `2` = `en progreso`, `3` = `resuelta` |
+| `incidentSeverityId` | `1` = `baja`, `2` = `media`, `3` = `alta` (only for `mala_practica`) |
+
+<Info>
+When an incident is created the server reverse-geocodes the coordinates via OpenStreetMap Nominatim and stores the full address string automatically.
+</Info>
+
+---
+
+## GET /api/incidents
+
+List all incidents. No authentication required — publicly accessible.
+
+**Auth:** None
+
+### Response `200`
+
+Array of incident objects, each including a nested `user` object with the reporter's basic information.
+
+<ResponseField name="id" type="integer">Incident ID.</ResponseField>
+<ResponseField name="name" type="string">Short title of the incident.</ResponseField>
+<ResponseField name="description" type="string">Detailed description.</ResponseField>
+<ResponseField name="island" type="string">Island where the incident occurred.</ResponseField>
+<ResponseField name="area" type="string">Accessibility area category.</ResponseField>
+<ResponseField name="address" type="string | null">Reverse-geocoded address string from OpenStreetMap.</ResponseField>
+<ResponseField name="latitude" type="string">Decimal latitude (up to 8 decimal places).</ResponseField>
+<ResponseField name="longitude" type="string">Decimal longitude (up to 8 decimal places).</ResponseField>
+<ResponseField name="dateIncident" type="string | null">Date of the incident (YYYY-MM-DD).</ResponseField>
+<ResponseField name="nameFile" type="string">URL of the uploaded incident image.</ResponseField>
+<ResponseField name="isApproved" type="boolean">Whether the incident has been approved by an admin. Defaults to `false`.</ResponseField>
+<ResponseField name="incidentTypeId" type="integer">Type ID.</ResponseField>
+<ResponseField name="incidentStatusId" type="integer">Status ID.</ResponseField>
+<ResponseField name="incidentSeverityId" type="integer | null">Severity ID (only set for `mala_practica` incidents).</ResponseField>
+<ResponseField name="userId" type="integer">ID of the reporting user.</ResponseField>
+<ResponseField name="user" type="object">
+  <Expandable title="properties">
+    <ResponseField name="firstName" type="string">Reporter's first name.</ResponseField>
+    <ResponseField name="lastName" type="string">Reporter's last name.</ResponseField>
+    <ResponseField name="nameFile" type="string | null">Reporter's profile image URL.</ResponseField>
+  </Expandable>
+</ResponseField>
+
+### Example
+
+```bash
+curl https://canaccesible.es/api/incidents
+```
+
+---
+
+## POST /api/incidents
+
+Report a new accessibility incident.
+
+**Auth:** `verifyTokenOrSession`  
+**Content-Type:** `multipart/form-data`
+
+<Warning>
+An image file (`image` field) is **required**. The incident is set to `isApproved: false` by default and must be approved by an admin before it appears as verified.
+</Warning>
+
+### Request body
+
+<ParamField body="name" type="string" required>
+  Short title for the incident.
+</ParamField>
+
+<ParamField body="description" type="string" required>
+  Full description of the incident.
+</ParamField>
+
+<ParamField body="latitude" type="number" required>
+  Latitude of the incident location (decimal degrees).
+</ParamField>
+
+<ParamField body="longitude" type="number" required>
+  Longitude of the incident location (decimal degrees).
+</ParamField>
+
+<ParamField body="incidentTypeId" type="integer" required>
+  Type: `1` (buena_practica) or `2` (mala_practica).
+</ParamField>
+
+<ParamField body="island" type="string" required>
+  One of the seven Canary Islands (see reference table above).
+</ParamField>
+
+<ParamField body="area" type="string" required>
+  Accessibility area: `movilidad`, `sensorial`, `arquitectura`, `transporte`, or `otro`.
+</ParamField>
+
+<ParamField body="image" type="file" required>
+  Photo of the incident. Stored in object storage.
+</ParamField>
+
+<ParamField body="incidentSeverityId" type="integer">
+  Severity (`1`–`3`). Only used when `incidentTypeId` is `2` (mala_practica).
+</ParamField>
+
+<ParamField body="incidentStatusId" type="integer">
+  Initial status ID. Defaults to `1` (pendiente).
+</ParamField>
+
+<ParamField body="dateIncident" type="string">
+  Date of the incident in `YYYY-MM-DD` format. Defaults to today.
+</ParamField>
+
+### Response `201`
+
+The newly created incident object.
+
+### Example
+
+```bash
+curl -X POST https://canaccesible.es/api/incidents \
+  -H "Authorization: Bearer eyJhbGci..." \
+  -F "name=Rampa sin barandilla" \
+  -F "description=La rampa de acceso al ayuntamiento carece de barandilla en el lateral izquierdo." \
+  -F "latitude=28.123456" \
+  -F "longitude=-15.432109" \
+  -F "island=Gran Canaria" \
+  -F "area=movilidad" \
+  -F "incidentTypeId=2" \
+  -F "incidentSeverityId=2" \
+  -F "image=@/path/to/foto.jpg"
+```
+
+### Errors
+
+| Status | Message |
+|--------|---------|
+| `400` | `name is required` / `description is required` / `latitude is required` / `longitude is required` / `incidentTypeId is required` / `Image is required` |
+| `403` | `Access denied. No token or session provided.` |
+
+---
+
+## GET /api/incidents/my-incidents
+
+Retrieve all incidents created by the currently authenticated user, including their like counts and status.
+
+**Auth:** `verifyToken` — JWT Bearer token only
+
+### Response `200`
+
+Array of incident objects with these additional/modified fields:
+
+<ResponseField name="likesCount" type="integer">
+  Total number of likes this incident has received.
+</ResponseField>
+
+<ResponseField name="status" type="object">
+  <Expandable title="properties">
+    <ResponseField name="status" type="string">Status string: `pendiente`, `en progreso`, or `resuelta`.</ResponseField>
+  </Expandable>
+</ResponseField>
+
+### Example
+
+```bash
+curl https://canaccesible.es/api/incidents/my-incidents \
+  -H "Authorization: Bearer eyJhbGci..."
+```
+
+```json
+[
+  {
+    "id": 17,
+    "name": "Rampa sin barandilla",
+    "island": "Gran Canaria",
+    "isApproved": true,
+    "likesCount": 5,
+    "status": { "status": "en progreso" }
+  }
+]
+```
+
+---
+
+## GET /api/incidents/:id
+
+Retrieve a single incident by ID. Publicly accessible.
+
+**Auth:** None
+
+### Path parameters
+
+<ParamField path="id" type="integer" required>
+  ID of the incident.
+</ParamField>
+
+### Response `200`
+
+The incident object (all fields as listed under `GET /api/incidents`, without the nested `user`).
+
+### Example
+
+```bash
+curl https://canaccesible.es/api/incidents/17
+```
+
+### Errors
+
+| Status | Message |
+|--------|---------|
+| `404` | `Incident not found.` |
+
+---
+
+## PUT /api/incidents/:id
+
+Update an existing incident. Only the original reporter or an admin may update an incident.
+
+**Auth:** `verifyTokenOrSession`  
+**Content-Type:** `multipart/form-data`
+
+### Path parameters
+
+<ParamField path="id" type="integer" required>
+  ID of the incident to update.
+</ParamField>
+
+### Request body (all fields optional)
+
+<ParamField body="name" type="string">Updated title.</ParamField>
+<ParamField body="description" type="string">Updated description.</ParamField>
+<ParamField body="latitude" type="number">New latitude. When provided together with `longitude`, the address is re-geocoded.</ParamField>
+<ParamField body="longitude" type="number">New longitude.</ParamField>
+<ParamField body="island" type="string">Updated island.</ParamField>
+<ParamField body="area" type="string">Updated area category.</ParamField>
+<ParamField body="incidentTypeId" type="integer">Updated type.</ParamField>
+<ParamField body="incidentStatusId" type="integer">Updated status (admin operation).</ParamField>
+<ParamField body="incidentSeverityId" type="integer">Updated severity (only for mala_practica).</ParamField>
+<ParamField body="isApproved" type="boolean">Approval flag. Can be set by admins to publish the incident.</ParamField>
+<ParamField body="dateIncident" type="string">Updated incident date (YYYY-MM-DD).</ParamField>
+<ParamField body="image" type="file">Replacement image. The old file is removed from storage.</ParamField>
+
+<Note>
+The `userId` field can only be changed by an admin (`roleId === 2`).
+</Note>
+
+### Response `200`
+
+The updated incident object.
+
+### Example
+
+```bash
+curl -X PUT https://canaccesible.es/api/incidents/17 \
+  -H "Authorization: Bearer eyJhbGci..." \
+  -F "isApproved=true" \
+  -F "incidentStatusId=2"
+```
+
+### Errors
+
+| Status | Message |
+|--------|---------|
+| `403` | `You do not have permission to update this incident.` |
+| `404` | `Incident not found.` |
+
+---
+
+## DELETE /api/incidents/:id
+
+Permanently delete an incident and its stored image. Only the original reporter or an admin may delete.
+
+**Auth:** `verifyTokenOrSession`
+
+### Path parameters
+
+<ParamField path="id" type="integer" required>
+  ID of the incident to delete.
+</ParamField>
+
+### Response `200`
+
+```json
+{ "message": "Incident and its associated image have been deleted." }
+```
+
+### Example
+
+```bash
+curl -X DELETE https://canaccesible.es/api/incidents/17 \
+  -H "Authorization: Bearer eyJhbGci..."
+```
+
+### Errors
+
+| Status | Message |
+|--------|---------|
+| `403` | `You do not have permission to delete this incident.` |
+| `404` | `Incident not found.` |

@@ -1,0 +1,160 @@
+---
+title: "Logging system"
+description: "Overview of server-level Nginx log rotation, application-level database audit logging, and production log access via PM2 and Docker."
+---
+
+This page describes the logging strategy for **CanAccesible**, covering Nginx server logs, application-level database audit logs, and how to access logs in production.
+
+---
+
+## Server-level logging (Nginx)
+
+Nginx acts as the web server and reverse proxy and automatically generates logs for monitoring traffic and debugging.
+
+### Log types
+
+| File | Contents |
+| :--- | :--- |
+| `/var/log/nginx/access.log` | Every client request: IP, URL, status code, user agent |
+| `/var/log/nginx/error.log` | Server issues, configuration errors, upstream failures |
+
+### Log rotation with logrotate
+
+To prevent disk saturation, `logrotate` is configured at `/etc/logrotate.d/nginx`:
+
+```nginx
+/var/log/nginx/*.log {
+    daily
+    dateext
+    missingok
+    rotate 14
+    compress
+    delaycompress
+    notifempty
+    create 0640 www-data adm
+    sharedscripts
+    postrotate
+        systemctl reload nginx > /dev/null 2>&1 || true
+    endscript
+}
+```
+
+| Setting | Value |
+| :--- | :--- |
+| Frequency | Daily |
+| Retention | 14 days |
+| Compression | `gzip` on rotated files |
+| File naming | Date extension (e.g., `access.log-20251127`) |
+
+### Manual rotation (testing)
+
+To test the rotation configuration without waiting for the daily cron job:
+
+```bash
+sudo logrotate -f /etc/logrotate.d/nginx
+```
+
+The `-f` flag forces rotation even if the `daily` condition has not been met yet.
+
+**Verify the result:**
+
+```bash
+# Before
+ls -l /var/log/nginx
+
+# Force rotation
+sudo logrotate -f /etc/logrotate.d/nginx
+
+# After — expect a new rotated file and access.log reset to 0 bytes
+ls -l /var/log/nginx
+```
+
+---
+
+## Application-level logging (database)
+
+The application maintains a detailed audit trail of critical user actions in the MySQL database, giving administrators visibility into security events and data modifications.
+
+### Tracked actions
+
+<CardGroup cols={2}>
+  <Card title="Authentication" icon="key">
+    - `LOGIN` — successful login
+    - `LOGOUT` — user logout
+    - `PASSWORD_RESET` — reset via email token
+    - `PASSWORD_CHANGE` — in-session password change
+  </Card>
+  <Card title="User management" icon="users">
+    - `CREATE` — new user registered
+    - `UPDATE` — user profile updated
+    - `DELETE` — user account deleted
+  </Card>
+</CardGroup>
+
+### `Logs` table structure
+
+| Column | Description |
+| :--- | :--- |
+| User | Who performed the action |
+| Action | Description of the event |
+| Entity | Type of object affected |
+| Entity ID | Specific ID of the affected object |
+| Date | Timestamp of the event |
+
+### Automated cleanup (node-cron)
+
+To keep the database lean, a scheduled service in the backend automatically purges old log entries.
+
+- **Service file:** `backend/services/logCleanup.service.js`
+- **Schedule:** Every day at **00:00 (midnight)**
+- **Retention policy:** Deletes logs older than **30 days** (configurable via `LOG_RETENTION_DAYS`)
+
+```javascript
+cron.schedule('0 0 * * *', async () => {
+    const retentionDays = 30;
+    // ... logic to delete logs older than retentionDays
+});
+```
+
+---
+
+## Production log access
+
+### Backend logs (Node.js via PM2)
+
+The backend runs under **PM2**. Access real-time logs for API errors, database queries, and general output:
+
+```bash
+# View all PM2 logs
+pm2 logs
+
+# View logs for the backend process specifically
+pm2 logs index
+```
+
+### OpenLDAP logs (Docker)
+
+The LDAP server runs as a Docker container. Authentication and user creation logs are here:
+
+```bash
+# View OpenLDAP container logs
+docker logs openldap
+
+# Follow logs in real-time
+docker logs -f openldap
+```
+
+### Frontend logs
+
+Because the frontend is a static application served by Nginx:
+
+- **Client-side errors** — visible only in the user's browser console (`F12`).
+- **Serving errors (404, 500)** — check `/var/log/nginx/error.log`.
+
+---
+
+## Admin log dashboard
+
+Administrators can view and analyze application logs from the built-in admin interface:
+
+**Location:** Admin Dashboard → **Registro de Actividad**

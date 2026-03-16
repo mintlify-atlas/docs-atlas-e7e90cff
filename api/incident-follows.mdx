@@ -1,0 +1,192 @@
+---
+title: "Incident follows"
+description: "Subscribe to updates on accessibility incidents. Followers receive push notifications when an incident's status changes."
+---
+
+
+<Note>
+The `PUT /api/incidentFollows/:id` endpoint always returns `403 Follows cannot be updated`. To change a follow, delete it and create a new one.
+</Note>
+
+---
+
+## POST /api/incidentFollows
+
+Follow an incident. Each user can follow a given incident only once.
+
+**Auth:** `verifyToken` — JWT Bearer token required
+
+### Request body
+
+<ParamField body="incidentId" type="integer" required>
+  ID of the incident to follow.
+</ParamField>
+
+<ParamField body="dateFollowed" type="string">
+  Follow date in `YYYY-MM-DD` format. Defaults to today.
+</ParamField>
+
+### Response `201`
+
+<ResponseField name="id" type="integer">Follow record ID.</ResponseField>
+<ResponseField name="userId" type="integer">ID of the following user.</ResponseField>
+<ResponseField name="incidentId" type="integer">ID of the followed incident.</ResponseField>
+<ResponseField name="dateFollowed" type="string">Date the follow was recorded (YYYY-MM-DD).</ResponseField>
+
+### Example
+
+```bash
+curl -X POST https://canaccesible.es/api/incidentFollows \
+  -H "Authorization: Bearer eyJhbGci..." \
+  -H "Content-Type: application/json" \
+  -d '{"incidentId": 17}'
+```
+
+### Errors
+
+| Status | Message |
+|--------|---------|
+| `400` | `incidentId is required` |
+| `400` | `You are already following this incident.` |
+| `401` | `Invalid token.` |
+| `403` | `Token not provided.` |
+
+---
+
+## GET /api/incidentFollows
+
+Retrieve all follow records across all incidents.
+
+**Auth:** None
+
+### Response `200`
+
+Array of follow objects (id, userId, incidentId, dateFollowed).
+
+### Example
+
+```bash
+curl https://canaccesible.es/api/incidentFollows
+```
+
+---
+
+## GET /api/incidentFollows/:id
+
+Retrieve a single follow record by its ID.
+
+**Auth:** None
+
+### Path parameters
+
+<ParamField path="id" type="integer" required>
+  ID of the follow record.
+</ParamField>
+
+### Response `200`
+
+A single follow object.
+
+### Example
+
+```bash
+curl https://canaccesible.es/api/incidentFollows/55
+```
+
+### Errors
+
+| Status | Message |
+|--------|---------|
+| `404` | `IncidentFollow not found.` |
+
+---
+
+## GET /api/incidentFollows/incident/:incidentId
+
+Retrieve all follow records for a specific incident.
+
+**Auth:** None
+
+### Path parameters
+
+<ParamField path="incidentId" type="integer" required>
+  ID of the incident.
+</ParamField>
+
+### Response `200`
+
+Array of follow objects for the specified incident.
+
+### Example
+
+```bash
+curl https://canaccesible.es/api/incidentFollows/incident/17
+```
+
+---
+
+## GET /api/incidentFollows/incident/:incidentId/user/:userId
+
+Check whether a specific user is following a specific incident.
+
+**Auth:** None
+
+### Path parameters
+
+<ParamField path="incidentId" type="integer" required>
+  ID of the incident.
+</ParamField>
+
+<ParamField path="userId" type="integer" required>
+  ID of the user.
+</ParamField>
+
+### Response `200`
+
+The follow record if found.
+
+### Example
+
+```bash
+curl https://canaccesible.es/api/incidentFollows/incident/17/user/42
+```
+
+### Errors
+
+| Status | Message |
+|--------|---------|
+| `404` | `Follow not found for this user and incident.` |
+
+---
+
+## DELETE /api/incidentFollows/:id
+
+Unfollow an incident. Only the user who created the follow record can delete it.
+
+**Auth:** `verifyToken` — JWT Bearer token required
+
+### Path parameters
+
+<ParamField path="id" type="integer" required>
+  ID of the follow record to delete.
+</ParamField>
+
+### Response `200`
+
+```json
+{ "message": "IncidentFollow has been deleted." }
+```
+
+### Example
+
+```bash
+curl -X DELETE https://canaccesible.es/api/incidentFollows/55 \
+  -H "Authorization: Bearer eyJhbGci..."
+```
+
+### Errors
+
+| Status | Message |
+|--------|---------|
+| `403` | `You do not have permission to delete this follow.` |
+| `404` | `IncidentFollow not found.` |

@@ -1,0 +1,232 @@
+---
+title: "Incident comments"
+description: "Create, read, update, and delete comments on accessibility incidents. Real-time events are broadcast over Socket.IO."
+---
+
+
+<Info>
+Comment create/update/delete operations emit Socket.IO events to the room `incident_<incidentId>` so connected clients receive changes in real time without polling.
+</Info>
+
+---
+
+## POST /api/incident-comments
+
+Add a comment to an incident.
+
+**Auth:** `verifyTokenOrSession`
+
+### Request body
+
+<ParamField body="incidentId" type="integer" required>
+  ID of the incident being commented on.
+</ParamField>
+
+<ParamField body="comment" type="string" required>
+  Comment text. Maximum 500 characters.
+</ParamField>
+
+<ParamField body="dateComment" type="string">
+  ISO timestamp for the comment. Defaults to the current server time.
+</ParamField>
+
+### Response `201`
+
+The created comment object including the commenter's user information.
+
+<ResponseField name="id" type="integer">Comment ID.</ResponseField>
+<ResponseField name="userId" type="integer">ID of the commenter.</ResponseField>
+<ResponseField name="incidentId" type="integer">ID of the parent incident.</ResponseField>
+<ResponseField name="comment" type="string">Comment text.</ResponseField>
+<ResponseField name="dateComment" type="string">Timestamp of the comment.</ResponseField>
+<ResponseField name="user" type="object">
+  <Expandable title="properties">
+    <ResponseField name="firstName" type="string">Commenter's first name.</ResponseField>
+    <ResponseField name="lastName" type="string">Commenter's last name.</ResponseField>
+    <ResponseField name="email" type="string">Commenter's email.</ResponseField>
+    <ResponseField name="nameFile" type="string | null">Commenter's profile image URL.</ResponseField>
+  </Expandable>
+</ResponseField>
+
+### Example
+
+```bash
+curl -X POST https://canaccesible.es/api/incident-comments \
+  -H "Authorization: Bearer eyJhbGci..." \
+  -H "Content-Type: application/json" \
+  -d '{"incidentId": 17, "comment": "He confirmado este problema esta mañana."}'
+```
+
+### Errors
+
+| Status | Message |
+|--------|---------|
+| `400` | `incidentId is required` / `comment is required` / `Comment cannot exceed 500 characters` |
+| `401` | `User not authenticated` |
+| `404` | `Incident not found` |
+
+---
+
+## GET /api/incident-comments/incident/:incidentId
+
+Retrieve all comments for a specific incident, ordered newest first.
+
+**Auth:** None
+
+### Path parameters
+
+<ParamField path="incidentId" type="integer" required>
+  ID of the incident whose comments you want to list.
+</ParamField>
+
+### Response `200`
+
+Array of comment objects. Each comment includes the nested `user` object (see `POST` response above).
+
+### Example
+
+```bash
+curl https://canaccesible.es/api/incident-comments/incident/17
+```
+
+```json
+[
+  {
+    "id": 3,
+    "userId": 42,
+    "incidentId": 17,
+    "comment": "He confirmado este problema esta mañana.",
+    "dateComment": "2025-06-10T09:15:00.000Z",
+    "user": {
+      "firstName": "María",
+      "lastName": "González",
+      "email": "maria@example.com",
+      "nameFile": null
+    }
+  }
+]
+```
+
+---
+
+## GET /api/incident-comments/:id
+
+Retrieve a single comment by its ID, including both user and incident details.
+
+**Auth:** None
+
+### Path parameters
+
+<ParamField path="id" type="integer" required>
+  ID of the comment.
+</ParamField>
+
+### Response `200`
+
+The comment object with nested `user` and `incident` objects.
+
+<ResponseField name="user" type="object">
+  <Expandable title="properties">
+    <ResponseField name="firstName" type="string" />
+    <ResponseField name="lastName" type="string" />
+    <ResponseField name="email" type="string" />
+    <ResponseField name="nameFile" type="string | null" />
+  </Expandable>
+</ResponseField>
+
+<ResponseField name="incident" type="object">
+  <Expandable title="properties">
+    <ResponseField name="id" type="integer" />
+    <ResponseField name="name" type="string" />
+    <ResponseField name="description" type="string" />
+  </Expandable>
+</ResponseField>
+
+### Example
+
+```bash
+curl https://canaccesible.es/api/incident-comments/3
+```
+
+### Errors
+
+| Status | Message |
+|--------|---------|
+| `404` | `Comment not found` |
+
+---
+
+## PUT /api/incident-comments/:id
+
+Update the text of a comment. Only the original commenter can edit their comment.
+
+**Auth:** `verifyTokenOrSession`
+
+### Path parameters
+
+<ParamField path="id" type="integer" required>
+  ID of the comment to update.
+</ParamField>
+
+### Request body
+
+<ParamField body="comment" type="string" required>
+  New comment text. Maximum 500 characters.
+</ParamField>
+
+### Response `200`
+
+The updated comment object with nested `user`.
+
+### Example
+
+```bash
+curl -X PUT https://canaccesible.es/api/incident-comments/3 \
+  -H "Authorization: Bearer eyJhbGci..." \
+  -H "Content-Type: application/json" \
+  -d '{"comment": "Texto actualizado del comentario."}'
+```
+
+### Errors
+
+| Status | Message |
+|--------|---------|
+| `400` | `comment is required for update` / `Comment cannot exceed 500 characters` |
+| `401` | `User not authenticated` |
+| `403` | `You are not authorized to update this comment` |
+| `404` | `Comment not found` |
+
+---
+
+## DELETE /api/incident-comments/:id
+
+Delete a comment. Only the original commenter can delete their own comment.
+
+**Auth:** `verifyTokenOrSession`
+
+### Path parameters
+
+<ParamField path="id" type="integer" required>
+  ID of the comment to delete.
+</ParamField>
+
+### Response `200`
+
+```json
+{ "message": "Comment deleted successfully" }
+```
+
+### Example
+
+```bash
+curl -X DELETE https://canaccesible.es/api/incident-comments/3 \
+  -H "Authorization: Bearer eyJhbGci..."
+```
+
+### Errors
+
+| Status | Message |
+|--------|---------|
+| `401` | `User not authenticated` |
+| `403` | `You are not authorized to delete this comment` |
+| `404` | `Comment not found` |

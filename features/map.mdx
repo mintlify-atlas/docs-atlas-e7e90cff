@@ -1,0 +1,113 @@
+---
+title: "Interactive map"
+description: "A Leaflet-based map showing all approved incidents as color-coded markers across the Canary Islands."
+---
+
+The map page at `/map` gives you a geographic overview of every approved accessibility incident reported on the platform. Incidents are plotted as markers on a Leaflet map centered on the Canary Islands.
+
+## How it works
+
+When the map loads it calls `GET /api/incidents` and filters the response to only show incidents where `isApproved === true`. Each incident that has valid `latitude` and `longitude` values is rendered as a marker.
+
+```js
+// Map.jsx — data loading
+useEffect(() => {
+  getAllIncidents().then((data) => {
+    const approved = data.filter((incident) => incident.isApproved);
+    setIncidents(approved);
+  });
+}, []);
+```
+
+## Marker colors
+
+Markers use two distinct colors so you can distinguish incident types at a glance:
+
+<CardGroup cols={2}>
+  <Card title="Green marker" icon="location-dot">
+    `incidentTypeId === 1` — a **good practice**. The location demonstrates accessible design worth highlighting.
+  </Card>
+  <Card title="Red marker" icon="location-dot">
+    `incidentTypeId === 2` — a **bad practice**. The location has an accessibility barrier that needs attention.
+  </Card>
+</CardGroup>
+
+Both icons are loaded from the `leaflet-color-markers` repository at 25×41 px with standard Leaflet shadow.
+
+## Map bounds and zoom
+
+The map is constrained to the Canary Islands to prevent users from panning off to unrelated areas:
+
+```js
+// Map.jsx — bounds configuration
+const canariasBounds = [
+  [27.5, -18.5],
+  [29.5, -13.0],
+];
+
+<MapContainer
+  center={[28.5, -15.5]}
+  zoom={8}
+  minZoom={8}
+  maxZoom={18}
+  maxBounds={canariasBounds}
+  maxBoundsViscosity={1}
+>
+```
+
+Tile data comes from OpenStreetMap (`https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png`).
+
+## Clicking a marker
+
+Clicking any marker opens a Leaflet `Popup` showing the incident name and a **View details** link. Clicking that link navigates you to `/incidents/:id` for the full incident detail page.
+
+```js
+// Map.jsx — marker popup
+<Popup>
+  <div>
+    <strong>{incident.name}</strong>
+    <br />
+    <button onClick={() => navigate(`/incidents/${incident.id}`)}>
+      View details
+    </button>
+  </div>
+</Popup>
+```
+
+## Nominatim geocoding
+
+CanAccesible integrates the [Nominatim API](https://nominatim.org/) for reverse geocoding — converting a latitude/longitude pair into a human-readable address string. This address is stored in the `address` field of the `Incident` model and displayed in the incident detail view.
+
+<Info>
+Nominatim is an open-source geocoding service built on OpenStreetMap data. No API key is required, but the service has a usage policy that limits request frequency.
+</Info>
+
+## Fetching map data via the API
+
+You can retrieve all incidents (including their coordinates) with a single unauthenticated request:
+
+```bash
+curl https://canaccesible.es/api/incidents
+```
+
+Each incident object in the response includes:
+
+```json
+{
+  "id": 12,
+  "name": "Accessible ramp at Plaza Mayor",
+  "incidentTypeId": 1,
+  "island": "Gran Canaria",
+  "area": "arquitectura",
+  "latitude": "28.10231234",
+  "longitude": "-15.41234321",
+  "address": "Plaza Mayor, Las Palmas de Gran Canaria",
+  "isApproved": true
+}
+```
+
+Filter to `isApproved === true` on the client side to match what the map displays.
+
+<Tip>
+The `incidentTypeId` field is all you need to decide which marker color to render. `1` → green (good practice), `2` → red (bad practice).
+</Tip>

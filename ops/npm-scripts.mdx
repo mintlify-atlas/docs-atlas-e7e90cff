@@ -1,0 +1,146 @@
+---
+title: "NPM scripts reference"
+description: "Complete reference for all NPM scripts available in the backend and frontend packages, including development, testing, database management, and build commands."
+---
+
+This page documents every script available in the backend and frontend packages.
+
+<Note>
+  Many scripts use `cross-env` internally. This tool ensures environment variables are set consistently across **Windows**, **macOS**, and **Linux**, so the scripts work the same way on any operating system.
+</Note>
+
+---
+
+## Backend (`/backend`)
+
+Run all backend commands from inside the `backend` directory.
+
+### Development
+
+| Script | Command | Description |
+| :--- | :--- | :--- |
+| Start (dev) | `npm run dev` | Starts the server with `NODE_ENV=development` |
+| Start (prod) | `npm start` | Starts the server with `NODE_ENV=production` |
+
+```bash
+# Development mode
+npm run dev
+
+# Production mode
+npm start
+```
+
+### Database management
+
+These commands target the **development** database (uses `.env.development`).
+
+| Script | Description |
+| :--- | :--- |
+| `npm run dev:setup` | One-shot setup: starts Docker (LDAP), creates DB, runs migrations, and seeds data |
+| `npm run dev:teardown` | Stops Docker and drops the development database |
+| `npm run dev:reset` | Hard reset: runs `dev:teardown` then `dev:setup`. Use to resolve conflicts |
+| `npm run db:create:dev` | Creates an empty development database |
+| `npm run db:migrate:dev` | Applies pending migrations to the development database |
+| `npm run db:seed:dev` | Populates the development database with test data |
+| `npm run db:drop:dev` | Deletes the development database completely |
+
+```bash
+# First-time setup
+npm run dev:setup
+
+# Fix a broken environment
+npm run dev:reset
+
+# Tear down when done
+npm run dev:teardown
+```
+
+### Docker / LDAP
+
+| Script | Description |
+| :--- | :--- |
+| `npm run openldap:dev:up` | Starts the OpenLDAP container for development (`docker-compose.yml`) |
+| `npm run openldap:dev:down` | Stops the OpenLDAP container |
+
+```bash
+npm run openldap:dev:up
+npm run openldap:dev:down
+```
+
+### Testing
+
+| Script | Description |
+| :--- | :--- |
+| `npm test` | Runs the full Jest test suite with `NODE_ENV=test` |
+| `npm run test:setup` | Starts Docker (test LDAP), creates test DB, runs migrations and seeds |
+| `npm run test:teardown` | Stops Docker and drops the test database |
+
+```bash
+# 1. Prepare the test environment
+npm run test:setup
+
+# 2. Run all tests
+npm test
+
+# 3. Clean up
+npm run test:teardown
+```
+
+<Tip>
+  Always run `test:setup` before your first test run, and `test:teardown` when you are finished. This keeps the test database and LDAP container from interfering with development.
+</Tip>
+
+#### Internal test scripts
+
+These are called automatically by `test:setup` and `test:teardown`. You do not need to call them directly.
+
+| Script | Description |
+| :--- | :--- |
+| `npm run openldap:test:up` | Starts the LDAP test container (`docker-compose.test.yml`) |
+| `npm run openldap:test:down` | Stops the LDAP test container |
+| `npm run db:create:test` | Creates the test database |
+| `npm run db:migrate:test` | Runs migrations against the test database |
+| `npm run db:seed:test` | Seeds the test database |
+| `npm run db:drop:test` | Drops the test database |
+
+---
+
+## Frontend (`/frontend`)
+
+Run all frontend commands from inside the `frontend` directory.
+
+### Development and build
+
+| Script | Command | Description |
+| :--- | :--- | :--- |
+| Start dev server | `npm run dev` | Starts Vite dev server (hot reload on save) |
+| Production build | `npm run build` | Builds optimized static files to `dist/` |
+| Preview build | `npm run preview` | Previews the production build locally |
+| Lint | `npm run lint` | Runs ESLint to check for code style errors |
+
+```bash
+# Start development
+npm run dev
+
+# Build for production
+npm run build
+
+# Preview the build before deploying
+npm run preview
+```
+
+### Testing
+
+| Script | Description |
+| :--- | :--- |
+| `npm test` | Runs the Vitest test suite |
+| `npm run coverage` | Runs tests and generates a code coverage report in `coverage/` |
+
+```bash
+# Run all tests
+npm test
+
+# Generate coverage report
+npm run coverage
+# Open coverage/index.html in a browser to view the report
+```

@@ -1,0 +1,103 @@
+---
+title: "Blog"
+description: "Platform blog for accessibility news, trends, and updates published by CanAccesible administrators."
+---
+
+The blog at `/blog` is where the CanAccesible team publishes articles on accessibility trends, platform news, and improvements across the islands. All articles are publicly readable without an account.
+
+## Browsing articles
+
+The blog page presents a featured slider for highlighted articles followed by a paginated list of all articles. Clicking an article card navigates to `/blog/:id` for the full article.
+
+Articles support on-demand translation via the MyMemory API. Each detail page shows an **ES / EN** toggle button that translates the title, description, and body content to English without leaving the page.
+
+## Article structure
+
+Blog articles are stored in the `BlogArticles` table:
+
+| Field | Type | Description |
+|---|---|---|
+| `id` | integer | Auto-incremented primary key |
+| `title` | string | Article headline |
+| `description` | text | Short summary shown in card views |
+| `content` | text | Full article body (rendered as HTML) |
+| `dateCreation` | date | Publication date (defaults to today) |
+| `nameFile` | string | URL or path to the cover image |
+
+## API endpoints
+
+| Method | Endpoint | Auth | Description |
+|---|---|---|---|
+| `GET` | `/api/blogArticles` | None | List all articles |
+| `GET` | `/api/blogArticles/:id` | None | Get a single article |
+| `POST` | `/api/blogArticles` | Session (admin) | Create a new article |
+| `PUT` | `/api/blogArticles/:id` | Session (admin) | Update an article |
+| `DELETE` | `/api/blogArticles/:id` | Session (admin) | Delete an article |
+
+<Info>
+Create, update, and delete operations are protected by `verifySession` — they require an active admin session, not a user JWT token. Regular users cannot publish articles.
+</Info>
+
+## Example: fetch all articles
+
+```bash
+curl https://canaccesible.es/api/blogArticles
+```
+
+Example response item:
+
+```json
+{
+  "id": 1,
+  "title": "New accessible beaches in Tenerife",
+  "description": "A look at the recent infrastructure improvements on three beaches.",
+  "content": "<p>This summer, the island council...</p>",
+  "dateCreation": "2026-03-01",
+  "nameFile": "https://spaces.example.com/blog/beach-accessibility.jpg"
+}
+```
+
+## Example: fetch a single article
+
+```bash
+curl https://canaccesible.es/api/blogArticles/1
+```
+
+## How admins publish articles
+
+<Steps>
+  <Step title="Access the admin dashboard">
+    Admins log in via the admin dashboard (EJS-rendered, served by the backend). Session authentication is required.
+  </Step>
+  <Step title="Create the article">
+    Send a `POST /api/blogArticles` request with `multipart/form-data`. The `image` field is the cover photo; other fields are sent as form fields.
+
+    ```bash
+    curl -X POST https://canaccesible.es/api/blogArticles \
+      -b "session_cookie=..." \
+      -F "title=Accessible tourism in Lanzarote" \
+      -F "description=A guide to the most accessible spots." \
+      -F "content=Full article text here." \
+      -F "dateCreation=2026-03-16" \
+      -F "image=@/path/to/cover.jpg"
+    ```
+  </Step>
+  <Step title="Article goes live">
+    Once created, the article is immediately visible to all visitors at `/blog`. No separate approval step is required for blog articles.
+  </Step>
+</Steps>
+
+## Frontend service reference
+
+```js
+// blogArticleService.js
+export const getAllBlogArticles = () =>
+  api.get("/blogArticles").then((res) => res.data);
+
+export const getBlogArticleById = (id) =>
+  api.get(`/blogArticles/${id}`).then((res) => res.data);
+```
+
+<Tip>
+Article `content` is rendered with `dangerouslySetInnerHTML` in `BlogArticleDetail.jsx`, with newlines converted to `<br>` tags. Format your content accordingly when creating articles via the API.
+</Tip>

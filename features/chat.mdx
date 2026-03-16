@@ -1,0 +1,166 @@
+---
+title: "Live chat"
+description: "Real-time chat with CanAccesible administrators using Socket.io, with push notifications for replies received when you're offline."
+---
+
+The live chat feature lets you open a support conversation with a CanAccesible administrator. Messages are delivered in real time via Socket.io. If you are not in the chat window when an admin replies, you receive a browser push notification.
+
+## Conversation types
+
+When you start a new conversation you choose a topic from four categories:
+
+| Value | Description |
+|---|---|
+| `soporte de cuenta` | Account support |
+| `reportar una incidencia` | Report an incident |
+| `recursos de accesibilidad` | Accessibility resources |
+| `consulta general` | General enquiry |
+
+This `type` is stored on the `Conversation` model and displayed in the push notification body when an admin replies.
+
+## Data model
+
+**Conversation**
+
+| Field | Type | Description |
+|---|---|---|
+| `id` | integer | Primary key |
+| `userId` | integer | The user who opened the conversation |
+| `type` | enum | Topic category (see above) |
+
+**ConversationMessage**
+
+| Field | Type | Description |
+|---|---|---|
+| `id` | integer | Primary key |
+| `conversationId` | integer | Parent conversation |
+| `senderId` | integer | User who sent the message |
+| `message` | text | Message body |
+| `dateMessage` | date | Date sent |
+| `seen` | boolean | Whether the recipient has seen the message (defaults to `false`) |
+
+## API endpoints
+
+### Conversations
+
+| Method | Endpoint | Auth | Description |
+|---|---|---|---|
+| `POST` | `/api/conversations` | JWT | Create a new conversation |
+| `GET` | `/api/conversations` | JWT | List all conversations for the current user |
+| `GET` | `/api/conversations/:id` | JWT | Get a single conversation |
+| `PUT` | `/api/conversations/:id` | JWT | Update a conversation |
+| `DELETE` | `/api/conversations/:id` | JWT | Delete a conversation |
+
+### Messages
+
+| Method | Endpoint | Auth | Description |
+|---|---|---|---|
+| `POST` | `/api/conversationMessages/:conversationId` | JWT | Send a message |
+| `GET` | `/api/conversationMessages/:conversationId` | JWT | Get all messages in a conversation |
+| `GET` | `/api/conversationMessages/:conversationId/:id` | JWT | Get a single message |
+| `PUT` | `/api/conversationMessages/:conversationId/:id` | JWT | Edit a message |
+| `DELETE` | `/api/conversationMessages/:conversationId/:id` | JWT | Delete a message |
+
+All conversation and message endpoints require a JWT Bearer token.
+
+## Starting a conversation
+
+<Steps>
+  <Step title="Navigate to the contact page">
+    Go to `/contact`. If you are authenticated, you can start a new conversation from here.
+  </Step>
+  <Step title="Choose a topic">
+    Select one of the four conversation types. This becomes the `type` value on the `Conversation` record.
+  </Step>
+  <Step title="Create the conversation">
+    ```bash
+    curl -X POST https://canaccesible.es/api/conversations \
+      -H "Authorization: Bearer <token>" \
+      -H "Content-Type: application/json" \
+      -d '{ "type": "consulta general" }'
+    ```
+
+    The response includes the new conversation `id`.
+  </Step>
+  <Step title="Open the chat window">
+    Navigate to `/conversations/:id`. The `Conversation.jsx` page fetches the conversation object and renders the `ChatWindow` component.
+  </Step>
+</Steps>
+
+## Real-time messaging with Socket.io
+
+The frontend connects to the backend Socket.io server via `socketService.js`. The JWT token is passed as a query parameter so the server can authenticate the socket connection:
+
+```js
+// socketService.js
+socket = io(url, {
+  query: { token },
+  transports: ["websocket"],
+});
+```
+
+### Socket events
+
+| Event | Direction | Description |
+|---|---|---|
+| `joinConversation` | Client → Server | Join the Socket.io room for a conversation |
+| `sendMessage` | Client → Server | Send a new message |
+| `newMessage` | Server → Client | Broadcast a new message to all room members |
+
+#### Joining a conversation room
+
+```js
+// conversation.socket.js (backend)
+socket.on("joinConversation", (conversationId) => {
+  if (!socket.user) return; // Authentication required
+  socket.join(String(conversationId));
+});
+```
+
+#### Sending a message
+
+```js
+// Payload sent from the client
+{
+  conversationId: 42,
+  message: "Hello, I need help with my account.",
+  dateMessage: "2026-03-16"
+}
+```
+
+The backend validates that the sending user owns the conversation (or is an admin), persists the `ConversationMessage`, fetches it with sender details, and emits `newMessage` to the room.
+
+## Push notifications for chat replies
+
+When an admin sends a message in a conversation, the backend checks whether the conversation owner is currently in the Socket.io room. If they are not, a browser push notification is sent:
+
+```js
+// conversation.socket.js — push notification trigger
+const payload = {
+  title: `Nueva respuesta de CanAccesible`,
+  body: `Desde el chat de ${conversation.type}: ${message.substring(0, 50)}...`,
+  url: `/conversations/${conversationId}`,
+  data: { conversationId }
+};
+pushSubscriptionController.sendNotificationToUser(conversation.userId, payload);
+```
+
+<Info>
+Push notifications are only sent when the user is absent from the room. If the chat window is open, the message arrives via the `newMessage` Socket.io event directly.
+</Info>
+
+## Viewing past conversations
+
+All conversations for the authenticated user are available at `GET /api/conversations`. Each conversation object includes its `type` and can be loaded individually with `GET /api/conversations/:id`.
+
+```js
+// Conversation.jsx — fetch on load
+const response = await axios.get(
+  `${import.meta.env.VITE_API_URL}/api/conversations/${conversationId}`,
+  { headers: { Authorization: `Bearer ${localStorage.getItem('token')}` } }
+);
+```
+
+<Warning>
+Conversation access is restricted: you can only read and send messages in conversations you own. The backend enforces this by checking `conversation.userId !== socket.user.id` on every `sendMessage` event (unless the sender is an admin).
+</Warning>

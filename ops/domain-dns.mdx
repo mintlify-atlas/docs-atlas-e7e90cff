@@ -1,0 +1,250 @@
+---
+title: "Domain & DNS setup"
+description: "How to acquire the canaccesible.es domain, configure DNS records in Nominalia, set up Nginx as a reverse proxy, and secure traffic with Let's Encrypt SSL."
+---
+
+This page covers domain acquisition, DNS record configuration, Nginx reverse proxy setup, and SSL certificate installation for **CanAccesible**.
+
+## Domain configuration
+
+### Acquisition
+
+The domain **`canaccesible.es`** was acquired through the registrar **Nominalia**.
+
+### DNS records
+
+DNS records are configured in the **Nominalia Control Panel** under **DNS & Name Servers** > **DNS Zone Management**.
+
+| Name | Type | Value |
+| :--- | :--- | :--- |
+| `canaccesible.es` | **A** | `64.227.124.155` |
+| `ftp.canaccesible.es` | **CNAME** | `canaccesible.es` |
+| `www.canaccesible.es` | **CNAME** | `canaccesible.es` |
+| `send.canaccesible.es` | **MX 10** | `feedback-smtp.eu-west-1.amazonses.com` |
+
+<Note>
+  DNS changes are not instantaneous. Propagation typically takes between **5 minutes and 24 hours** globally.
+</Note>
+
+Ensure **NS Records** remain set to Nominalia's default name servers so the panel retains management control.
+
+---
+
+## Application configuration
+
+Before setting up the web server, update the application code to accept requests from the new domain.
+
+### Frontend (Vite)
+
+Update `vite.config.js` to allow hosts forwarded by Nginx:
+
+```javascript
+server: {
+    host: true,
+    allowedHosts: ['canaccesible.es', 'www.canaccesible.es', 'localhost']
+}
+```
+
+### Backend (CORS)
+
+Update the CORS configuration in `backend/index.js` to allow the production domain:
+
+```javascript
+app.use((req, res, next) => {
+  const allowedOrigins = [
+    'http://localhost:5173',
+    'https://canaccesible.es',
+    'https://www.canaccesible.es'
+  ];
+  const origin = req.headers.origin;
+  if (allowedOrigins.includes(origin)) {
+    res.setHeader('Access-Control-Allow-Origin', origin);
+  }
+  // ... existing headers ...
+  next();
+});
+```
+
+---
+
+## Nginx setup
+
+The application runs on a **DigitalOcean Droplet** (Ubuntu). **Nginx** acts as the web server and reverse proxy.
+
+### Installation
+
+```bash
+sudo apt update
+sudo apt install nginx
+```
+
+### Why a reverse proxy?
+
+<CardGroup cols={2}>
+  <Card title="Performance" icon="gauge">
+    Nginx serves static files much faster than Node.js.
+  </Card>
+  <Card title="Port hiding" icon="eye-off">
+    Users access `canaccesible.es` without needing to append port numbers.
+  </Card>
+  <Card title="Security" icon="shield">
+    Hides the internal network topology from the public internet.
+  </Card>
+  <Card title="SSL termination" icon="lock">
+    Nginx handles HTTPS encryption and decryption centrally.
+  </Card>
+</CardGroup>
+
+### Final Nginx configuration
+
+Create `/etc/nginx/sites-available/canaccesible.es` with the following content:
+
+```nginx
+server {
+    server_name canaccesible.es www.canaccesible.es;
+
+    # Frontend (static files)
+    location / {
+        root /var/www/canaccesible;
+        index index.html index.htm;
+        # Essential for React Router: redirect 404s to index.html
+        try_files $uri $uri/ /index.html;
+    }
+
+    # Socket.io (WebSockets)
+    location /socket.io/ {
+        proxy_pass http://127.0.0.1:85;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection "upgrade";
+    }
+
+    # Backend API
+    location /api {
+        proxy_pass http://127.0.0.1:85;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    }
+
+    # Admin dashboard
+    location /dashboard-admin {
+        proxy_pass http://127.0.0.1:85;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    }
+
+    # Images backend
+    location /images {
+        proxy_pass http://127.0.0.1:85;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    }
+
+    # SSL configuration (managed by Certbot)
+    listen 443 ssl http2;
+    ssl_certificate /etc/letsencrypt/live/canaccesible.es/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/canaccesible.es/privkey.pem;
+    include /etc/letsencrypt/options-ssl-nginx.conf;
+    ssl_dhparam /etc/letsencrypt/ssl-dhparams.pem;
+}
+
+# HTTP -> HTTPS redirection
+server {
+    if ($host = www.canaccesible.es) {
+        return 301 https://$host$request_uri;
+    }
+    if ($host = canaccesible.es) {
+        return 301 https://$host$request_uri;
+    }
+    listen 80;
+    server_name canaccesible.es www.canaccesible.es;
+    return 404;
+}
+```
+
+### Activating the configuration
+
+```bash
+# Enable the new site
+sudo ln -s /etc/nginx/sites-available/canaccesible.es /etc/nginx/sites-enabled/
+
+# Remove the default site (prevents 404 conflicts)
+sudo rm /etc/nginx/sites-enabled/default
+
+# Restart Nginx
+sudo systemctl restart nginx
+```
+
+### Configuration reference
+
+| Directive | Purpose |
+| :--- | :--- |
+| `location /` | Serves static React build from `/var/www/canaccesible`; `try_files` supports client-side routing |
+| `location /socket.io/` | Upgrades the HTTP connection to a persistent WebSocket connection |
+| `location /api` | Proxies API requests to the backend on port 85 |
+| `location /dashboard-admin` | Routes admin dashboard requests to the backend on port 85 |
+| `location /images` | Routes image requests to the backend on port 85 |
+
+---
+
+## Conflict resolution: Apache vs Nginx
+
+If Nginx fails to start because **port 80 is already in use**, Apache may be running. Diagnose with:
+
+```bash
+sudo lsof -i :80
+```
+
+If Apache is the culprit, stop and disable it:
+
+```bash
+sudo systemctl stop apache2
+sudo systemctl disable apache2
+sudo lsof -i :80
+sudo systemctl start nginx
+```
+
+---
+
+## SSL/TLS with Let's Encrypt
+
+<Steps>
+  <Step title="Install Certbot">
+    ```bash
+    sudo apt install certbot python3-certbot-nginx -y
+    ```
+  </Step>
+
+  <Step title="Request and install the certificate">
+    ```bash
+    sudo certbot --nginx -d canaccesible.es -d www.canaccesible.es
+    ```
+
+    Certbot will:
+    1. Verify control over `canaccesible.es`.
+    2. Obtain a signed certificate from Let's Encrypt.
+    3. Automatically modify the Nginx configuration to use the certificate.
+    4. Configure a 301 redirect from HTTP to HTTPS.
+  </Step>
+
+  <Step title="Verify">
+    ```bash
+    # Check Nginx syntax
+    sudo nginx -t
+
+    # Restart Nginx to apply changes
+    sudo systemctl restart nginx
+    ```
+  </Step>
+</Steps>
+
+<Tip>
+  Certbot sets up a systemd timer (or cron job) to automatically renew certificates before they expire. Let's Encrypt certificates are valid for **90 days**. Certificates are stored in `/etc/letsencrypt/live/canaccesible.es/`.
+</Tip>
+
+The application is now accessible at **`https://canaccesible.es`**.

@@ -1,0 +1,75 @@
+---
+title: "Introduction"
+description: "CanAccesible — a community-driven platform empowering citizens of the Canary Islands to improve accessibility together."
+---
+
+## What is CanAccesible?
+
+**CanAccesible** is a comprehensive web platform designed for the Canary Islands that empowers citizens to actively participate in improving accessibility across the archipelago. Built with a full React + Express stack, it combines modern web technology with social awareness to create a collaborative accessibility community.
+
+<CardGroup cols={2}>
+  <Card title="Report Incidents" icon="flag" href="/features/incidents">
+    Document accessibility barriers and good practices in public and private spaces across the islands.
+  </Card>
+  <Card title="Interactive Map" icon="map" href="/features/map">
+    Visualize all reported incidents on an interactive Leaflet map for a clear overview of the accessibility landscape.
+  </Card>
+  <Card title="Real-time Chat" icon="comments" href="/features/chat">
+    Connect directly with administrators via live Socket.io-powered chat for support and guidance.
+  </Card>
+  <Card title="Push Notifications" icon="bell" href="/features/notifications">
+    Receive instant notifications for incident updates, chat responses, and important announcements.
+  </Card>
+</CardGroup>
+
+## Key features
+
+<CardGroup cols={2}>
+  <Card title="Community Interaction" icon="users">
+    Like, comment on, and follow incidents to engage with the accessibility community and stay updated on changes.
+  </Card>
+  <Card title="User Dashboard" icon="gauge">
+    View and manage all your reported incidents from a personal dashboard with full CRUD capabilities.
+  </Card>
+  <Card title="Blog & News" icon="newspaper" href="/features/blog">
+    Stay informed with articles on the latest accessibility trends, news, and improvements across the islands.
+  </Card>
+  <Card title="Multi-language Support" icon="language">
+    Full internationalization via react-i18next and the MyMemory translation API for Spanish and English.
+  </Card>
+</CardGroup>
+
+## Platform architecture
+
+CanAccesible is a full-stack monorepo with a React 19 frontend and an Express 5 backend:
+
+```
+CanAccesible/
+├── frontend/    # React 19 + Vite + TailwindCSS 4
+├── backend/     # Express 5 + Sequelize + MySQL
+├── docs/        # Project documentation
+└── ldap/        # OpenLDAP configuration
+```
+
+The backend exposes a REST API consumed by the React frontend and an admin dashboard rendered server-side using EJS templates.
+
+## Live application
+
+The platform is publicly accessible at [canaccesible.es](https://canaccesible.es). The interactive API documentation is available at [canaccesible.es/api-docs](https://canaccesible.es/api-docs).
+
+## Getting started
+
+<CardGroup cols={2}>
+  <Card title="Prerequisites" icon="list-check" href="/getting-started/prerequisites">
+    System requirements and tools you need before installing.
+  </Card>
+  <Card title="Installation" icon="download" href="/getting-started/installation">
+    Step-by-step local development setup guide.
+  </Card>
+  <Card title="Configuration" icon="gear" href="/getting-started/configuration">
+    Environment variables and service configuration reference.
+  </Card>
+  <Card title="API Reference" icon="code" href="/api/auth">
+    Complete REST API documentation for all endpoints.
+  </Card>
+</CardGroup>

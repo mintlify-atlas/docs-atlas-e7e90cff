@@ -1,0 +1,80 @@
+---
+title: "Prerequisites"
+description: "Everything you need to install before running CanAccesible locally."
+---
+
+Before you set up CanAccesible, make sure the following tools are installed on your machine.
+
+## Required software
+
+<CardGroup cols={2}>
+  <Card title="Node.js 18+" icon="server">
+    Required to run the backend and the Vite development server. NPM is bundled with Node.js.
+  </Card>
+  <Card title="MySQL 8" icon="database">
+    The relational database that persists all platform data. You need a running MySQL instance and a root password.
+  </Card>
+  <Card title="Docker" icon="box">
+    Used to run the OpenLDAP container. Docker Desktop is recommended on Windows and macOS.
+  </Card>
+  <Card title="Git" icon="git-branch">
+    Required to clone the repository and manage branches.
+  </Card>
+</CardGroup>
+
+## Installing on Windows
+
+If you are on Windows and have **winget** (Windows Package Manager) available, you can install all prerequisites from the terminal. If winget is not installed, download it from the Microsoft Store or GitHub.
+
+<Steps>
+  <Step title="Install Node.js and NPM">
+    ```bash
+    winget install OpenJS.NodeJS
+    ```
+  </Step>
+  <Step title="Install MySQL">
+    ```bash
+    winget install Oracle.MySQL
+    ```
+    <Note>During MySQL installation you will be prompted to set a root password. Keep this password — you will need it when configuring the backend `.env.development` file.</Note>
+  </Step>
+  <Step title="Install Docker Desktop">
+    ```bash
+    winget install Docker.DockerDesktop
+    ```
+  </Step>
+  <Step title="Install Git">
+    ```bash
+    winget install Git.Git
+    ```
+  </Step>
+</Steps>
+
+## Installing manually
+
+Alternatively, download and run the official installers:
+
+| Tool | Download link |
+|---|---|
+| Node.js | [nodejs.org](https://nodejs.org/) |
+| MySQL Community Server | [dev.mysql.com/downloads/mysql](https://dev.mysql.com/downloads/mysql/) |
+| Docker Desktop | [docker.com/products/docker-desktop](https://www.docker.com/products/docker-desktop/) |
+| Git | [git-scm.com](https://git-scm.com/) |
+
+## Verifying your installation
+
+After installation, open a terminal and run the following commands to confirm each tool is available:
+
+```bash
+node --version
+npm --version
+mysql --version
+docker --version
+git --version
+```
+
+Each command should print a version string. If any command is not found, check that the tool's binary directory is in your system `PATH`.
+
+<Warning>
+  MySQL must be **running** (not just installed) before you execute the backend setup script. Start the MySQL service via your system's service manager or Docker before proceeding to the installation steps.
+</Warning>

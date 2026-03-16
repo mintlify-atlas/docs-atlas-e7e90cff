@@ -1,0 +1,157 @@
+---
+title: "Push notifications"
+description: "Web push notifications using the VAPID protocol to alert users about chat responses, incident updates, and announcements."
+---
+
+CanAccesible uses the Web Push API with VAPID (Voluntary Application Server Identification) authentication to deliver browser push notifications to users even when the platform is not open in a tab.
+
+## How it works
+
+<Steps>
+  <Step title="Register the service worker">
+    On login, the frontend registers `/sw.js` as a service worker. The service worker handles incoming push events and displays the notification.
+
+    ```js
+    // pushNotificationService.js
+    const register = await navigator.serviceWorker.register('/sw.js', {
+      scope: '/'
+    });
+    ```
+  </Step>
+  <Step title="Request push permission">
+    The browser prompts the user to allow notifications. This is required before a push subscription can be created.
+  </Step>
+  <Step title="Subscribe with the VAPID public key">
+    The frontend subscribes to the browser's push service using the VAPID public key. If a subscription already exists it is re-sent to the backend to ensure it stays synced.
+
+    ```js
+    // pushNotificationService.js
+    const subscription = await registration.pushManager.subscribe({
+      userVisibleOnly: true,
+      applicationServerKey: urlBase64ToUint8Array(PUBLIC_VAPID_KEY)
+    });
+    ```
+  </Step>
+  <Step title="Send the subscription to the backend">
+    The subscription object (containing `endpoint`, `p256dh`, and `auth`) is POSTed to `/api/push/subscribe`.
+
+    ```js
+    await api.post('/push/subscribe', subscription);
+    ```
+  </Step>
+  <Step title="Backend stores the subscription">
+    The `PushSubscriptions` table stores one record per device per user:
+
+    | Field | Description |
+    |---|---|
+    | `userId` | Owner of the subscription |
+    | `endpoint` | Browser push service URL |
+    | `p256dh` | Public encryption key |
+    | `auth` | Authentication secret |
+  </Step>
+</Steps>
+
+## API endpoints
+
+| Method | Endpoint | Auth | Description |
+|---|---|---|---|
+| `POST` | `/api/push/subscribe` | JWT | Store a new push subscription |
+| `POST` | `/api/push/unsubscribe` | JWT | Remove a push subscription |
+
+```bash
+# Subscribe
+curl -X POST https://canaccesible.es/api/push/subscribe \
+  -H "Authorization: Bearer <token>" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "endpoint": "https://fcm.googleapis.com/fcm/send/...",
+    "keys": {
+      "p256dh": "<public_key>",
+      "auth": "<auth_secret>"
+    }
+  }'
+```
+
+## In-app notifications
+
+Beyond browser push, CanAccesible also stores in-app notifications in the `Notifications` table. These appear in the user dashboard for the last 7 days.
+
+| Field | Type | Description |
+|---|---|---|
+| `userId` | integer | Recipient user ID |
+| `entity` | enum | Source entity that triggered the notification |
+| `entityId` | integer | ID of that entity |
+| `message` | text | Human-readable notification text |
+| `dateNotification` | date | Date created |
+
+The `entity` field can be one of:
+`User`, `Incident`, `IncidentComment`, `IncidentLike`, `IncidentFollow`, `Blog`, `Conversation`, `ConversationMessage`
+
+## Notification triggers
+
+<CardGroup cols={2}>
+  <Card title="Chat response" icon="comment">
+    When an admin replies in a conversation, a push notification is sent to the user if they are not currently in the chat room. The notification body previews the first 50 characters of the message.
+  </Card>
+  <Card title="Incident update" icon="flag">
+    When an incident author saves an edit, an in-app notification is created for every user who follows that incident.
+  </Card>
+</CardGroup>
+
+### Chat push notification payload
+
+```json
+{
+  "title": "Nueva respuesta de CanAccesible",
+  "body": "Desde el chat de soporte de cuenta: Your message preview...",
+  "url": "/conversations/42",
+  "data": { "conversationId": 42 }
+}
+```
+
+## In-app notification API endpoints
+
+| Method | Endpoint | Auth | Description |
+|---|---|---|---|
+| `GET` | `/api/notifications` | JWT | Get all notifications for the current user |
+| `POST` | `/api/notifications` | JWT | Create a notification |
+| `PUT` | `/api/notifications/:id` | JWT | Update a notification |
+| `DELETE` | `/api/notifications/:id` | JWT | Delete a notification |
+
+All notification routes require a JWT Bearer token.
+
+## Environment configuration
+
+VAPID keys are configured via environment variables in the backend:
+
+```env
+# Web Push Notifications (VAPID Keys)
+VAPID_PUBLIC_KEY=your_vapid_public_key
+VAPID_PRIVATE_KEY=your_vapid_private_key
+```
+
+<Tip>
+Generate a VAPID key pair with the `web-push` Node.js library:
+
+```bash
+npx web-push generate-vapid-keys
+```
+
+Set both keys in your backend `.env.development` file and copy the public key into `pushNotificationService.js`.
+</Tip>
+
+## Unsubscribing
+
+To stop receiving push notifications, the frontend calls `unsubscribeFromPushNotifications()`, which removes the browser subscription and sends a `POST /api/push/unsubscribe` request with the subscription endpoint:
+
+```js
+// pushNotificationService.js
+export const unsubscribeFromPushNotifications = async () => {
+  const registration = await navigator.serviceWorker.ready;
+  const subscription = await registration.pushManager.getSubscription();
+  if (subscription) {
+    await subscription.unsubscribe();
+    await api.post('/push/unsubscribe', { endpoint: subscription.endpoint });
+  }
+};
+```

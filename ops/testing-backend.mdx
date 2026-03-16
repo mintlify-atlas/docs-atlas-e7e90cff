@@ -1,0 +1,232 @@
+---
+title: "Backend testing"
+description: "How to set up, run, and write tests for the CanAccesible backend using Jest and Supertest."
+---
+
+The backend uses **Jest** and **Supertest** for integration testing across all major API endpoints.
+
+---
+
+## Test structure
+
+Tests are organized by feature in the `backend/tests/` directory:
+
+```
+backend/tests/
+├── blogArticle.test.js          # Blog article CRUD & dashboard
+├── conversationMessage.test.js  # Messaging and chat history
+├── dashboard.users.test.js      # Admin dashboard user management
+├── incident.test.js             # Incident full lifecycle
+├── incidentComment.test.js      # Incident commenting system
+└── notification.test.js         # Alert and notification system
+```
+
+---
+
+## Requirements
+
+- **Node.js** v18 or later (LTS recommended)
+- **Docker** — required to run the OpenLDAP test container
+- Dependencies installed:
+
+```bash
+cd backend
+npm install
+```
+
+---
+
+## Jest configuration
+
+The Jest configuration lives in `backend/jest.config.js`:
+
+```javascript
+module.exports = {
+  testEnvironment: "node",
+  testMatch: ["**/tests/**/*.test.js"],
+  verbose: true,
+  forceExit: true,
+  clearMocks: true,
+  resetMocks: true,
+  restoreMocks: true,
+};
+```
+
+| Option | Value | Purpose |
+| :--- | :--- | :--- |
+| `testEnvironment` | `node` | Run tests in a Node.js context |
+| `testMatch` | `**/tests/**/*.test.js` | Discovers all test files under `tests/` |
+| `verbose` | `true` | Shows individual test names in output |
+| `forceExit` | `true` | Forces Jest to exit after tests complete |
+| `clearMocks` | `true` | Clears mock instances and calls between tests |
+| `resetMocks` | `true` | Resets mock state between tests |
+| `restoreMocks` | `true` | Restores original implementations between tests |
+
+---
+
+## Running tests
+
+<Steps>
+  <Step title="Set up the test environment">
+    Before running tests, initialize the test environment. This command starts the OpenLDAP test container, creates the test database, runs migrations, and seeds data.
+
+    ```bash
+    npm run test:setup
+    ```
+
+    Internally, this runs:
+    1. `openldap:test:up` — starts the container from `docker-compose.test.yml`
+    2. `db:create:test` — creates the test database
+    3. `db:migrate:test` — applies all migrations
+    4. `db:seed:test` — seeds initial data
+  </Step>
+
+  <Step title="Run the test suite">
+    ```bash
+    npm test
+    ```
+
+    This runs `cross-env NODE_ENV=test jest` against all files matching `**/tests/**/*.test.js`.
+  </Step>
+
+  <Step title="Tear down the test environment">
+    After finishing, clean up the test database and container:
+
+    ```bash
+    npm run test:teardown
+    ```
+
+    This stops the OpenLDAP test container and drops the test database.
+  </Step>
+</Steps>
+
+<Warning>
+  Always run `test:setup` before your first test run in a session and `test:teardown` when done. Running tests without the LDAP container or test database will cause authentication-related test failures.
+</Warning>
+
+---
+
+## Real test example
+
+The following is from `backend/tests/blogArticle.test.js`. It demonstrates how authentication is mocked and how Supertest is used to test full HTTP flows against the Express app.
+
+### Mocking authentication
+
+```javascript
+// Mock auth middleware to simulate an authenticated admin session
+jest.mock('../middlewares/auth.middleware', () => {
+  const originalModule = jest.requireActual('../middlewares/auth.middleware');
+  const mockSession = { 
+    userId: 1, 
+    role: 'admin', 
+    email: 'admin@example.com', 
+    firstName: 'Admin', 
+    lastName: 'Test',
+    cookie: {
+      originalMaxAge: 3600000,
+      secure: false,
+      httpOnly: true,
+      path: '/'
+    },
+    save: (cb) => { if(cb) cb(); },
+    destroy: (cb) => { if(cb) cb(); },
+    touch: () => {}
+  };
+
+  return {
+    ...originalModule,
+    verifySession: (req, res, next) => {
+      req.user = { ...mockSession };
+      req.session = mockSession; 
+      next();
+    },
+    verifyAdmin: (req, res, next) => {
+        req.user = { ...mockSession };
+        req.session = mockSession;
+        next();
+    }
+  };
+});
+```
+
+### CRUD test suite
+
+```javascript
+const request = require('supertest');
+const app = require('../index');
+const { sequelize, blogArticle: BlogArticle } = require('../models');
+
+describe('BlogArticle API (Session Auth)', () => {
+  let articleId;
+
+  afterAll(async () => {
+    await sequelize.close();
+  });
+
+  // CREATE
+  test('POST /api/blogArticles - Should create an article', async () => {
+    const res = await request(app)
+      .post('/api/blogArticles')
+      .field('title', 'New Accessibility Article')
+      .field('description', 'Short description')
+      .field('content', 'Full article content...')
+      .field('dateCreation', '2025-01-01')
+      .attach('image', Buffer.from('fake image'), 'test.jpg');
+
+    expect(res.statusCode).toEqual(201);
+    expect(res.body).toHaveProperty('id');
+    expect(res.body.title).toBe('New Accessibility Article');
+    articleId = res.body.id;
+  });
+
+  // READ
+  test('GET /api/blogArticles - Should retrieve the list of articles', async () => {
+    const res = await request(app).get('/api/blogArticles');
+
+    expect(res.statusCode).toEqual(200);
+    expect(Array.isArray(res.body)).toBe(true);
+    expect(res.body.length).toBeGreaterThan(0);
+  });
+
+  // UPDATE
+  test('PUT /api/blogArticles/:id - Should update an article', async () => {
+    const res = await request(app)
+      .put(`/api/blogArticles/${articleId}`)
+      .field('title', 'Updated Article')
+      .field('description', 'New description')
+      .field('content', 'New content')
+      .field('dateCreation', '2025-01-02')
+      .attach('image', Buffer.from('fake image 2'), 'updated.jpg');
+
+    expect(res.statusCode).toEqual(200);
+
+    const updated = await BlogArticle.findByPk(articleId);
+    expect(updated.title).toBe('Updated Article');
+  });
+
+  // DELETE
+  test('DELETE /api/blogArticles/:id - Should delete an article', async () => {
+    const res = await request(app).delete(`/api/blogArticles/${articleId}`);
+
+    expect(res.statusCode).toEqual(200);
+
+    const check = await BlogArticle.findByPk(articleId);
+    expect(check).toBeNull();
+  });
+
+  // VALIDATION
+  test('POST /api/blogArticles - Should fail if title is missing', async () => {
+    const res = await request(app)
+      .post('/api/blogArticles')
+      .field('description', 'Missing Title Test')
+      .attach('image', Buffer.from('fake'), 'test.jpg');
+
+    expect(res.statusCode).toEqual(400);
+    expect(res.body.message).toContain('title');
+  });
+});
+```
+
+<Tip>
+  Mock the `auth.middleware` at the top of each test file to bypass real session/token checks. This keeps tests focused on business logic rather than authentication mechanics.
+</Tip>

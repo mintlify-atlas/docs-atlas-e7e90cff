@@ -1,0 +1,146 @@
+---
+title: "Installation"
+description: "Step-by-step guide to cloning and running CanAccesible on your local machine."
+---
+
+Follow these steps to get CanAccesible running locally. You need all [prerequisites](/getting-started/prerequisites) installed before you begin.
+
+<Steps>
+  <Step title="Clone the repository">
+    ```bash
+    git clone https://github.com/devcarlosperez/CanAccesible.git
+    cd CanAccesible
+    ```
+  </Step>
+
+  <Step title="Set up the backend environment">
+    Navigate to the `backend` directory and create your local environment files from the provided example:
+
+    ```bash
+    cd backend
+    cp .env.example .env.development
+    cp .env.example .env.test
+    ```
+
+    Open `.env.development` in your editor and fill in your credentials:
+
+    ```env
+    # Application
+    NODE_ENV=development
+
+    # Database
+    DB_HOST=localhost
+    DB_PORT=3306
+    DB_USER=root
+    DB_PASS=your_mysql_root_password
+    DB_NAME=db_canaccesible
+    DB_SSL=false
+
+    FRONTEND_URL=http://localhost:5173
+
+    # Authentication
+    JWT_SECRET=your_super_secret_jwt_key_here
+    SESSION_SECRET=your_super_secret_session_key_here
+
+    # DigitalOcean Spaces (optional for local development)
+    DO_ACCESS_KEY=your_digitalocean_access_key
+    DO_SECRET_KEY=your_digitalocean_secret_key
+    DO_SPACE_NAME=your_space_name
+    DO_SPACE_ENDPOINT=your_endpoint_space
+
+    # Email (Resend)
+    RESEND_API=your_resend_api_key_here
+
+    # LDAP
+    LDAP_URL=ldap://localhost:389
+    LDAP_BASE_DN=dc=canaccesible,dc=es
+    LDAP_ADMIN_DN=cn=admin,dc=canaccesible,dc=es
+    LDAP_ADMIN_PASSWORD=admin
+
+    # Web Push (VAPID)
+    VAPID_PUBLIC_KEY=your_vapid_public_key
+    VAPID_PRIVATE_KEY=your_vapid_private_key
+    ```
+
+    <Note>
+      For `.env.test`, set `NODE_ENV=test` and use a different database name (e.g. `db_canaccesible_test`) to avoid overwriting development data during test runs.
+    </Note>
+  </Step>
+
+  <Step title="Install backend dependencies">
+    ```bash
+    npm install
+    ```
+  </Step>
+
+  <Step title="Initialize the environment">
+    Run the automated setup script. This single command starts the OpenLDAP Docker container, creates the MySQL database, runs all Sequelize migrations, and seeds initial data:
+
+    ```bash
+    npm run dev:setup
+    ```
+
+    <Tip>
+      If you need to wipe and rebuild the environment later, run `npm run dev:reset`. This is equivalent to running `dev:teardown` followed by `dev:setup`.
+    </Tip>
+  </Step>
+
+  <Step title="Start the backend server">
+    ```bash
+    npm run dev
+    ```
+
+    The backend API will be available at `http://localhost:85`.
+  </Step>
+
+  <Step title="Set up the frontend">
+    Open a **new terminal** and navigate to the `frontend` directory:
+
+    ```bash
+    cd frontend
+    cp .env.example .env.development
+    ```
+
+    Edit `.env.development` to point at your running backend:
+
+    ```env
+    # Backend API URL
+    VITE_API_URL=http://localhost:85
+    ```
+  </Step>
+
+  <Step title="Install frontend dependencies">
+    ```bash
+    npm install
+    ```
+  </Step>
+
+  <Step title="Start the frontend development server">
+    ```bash
+    npm run dev
+    ```
+
+    The React application will be available at `http://localhost:5173`.
+  </Step>
+
+  <Step title="Open the application">
+    Navigate to `http://localhost:5173` in your browser. You should see the CanAccesible platform running with seeded data.
+  </Step>
+</Steps>
+
+## Troubleshooting
+
+<AccordionGroup>
+  <Accordion title="Docker is not running when I execute dev:setup">
+    The `dev:setup` script starts the OpenLDAP container with `docker compose up`. Make sure Docker Desktop (or the Docker daemon on Linux) is running before you execute the script.
+  </Accordion>
+  <Accordion title="MySQL connection refused">
+    Verify that your MySQL service is running and that `DB_HOST`, `DB_PORT`, `DB_USER`, and `DB_PASS` in `.env.development` match your local MySQL configuration.
+  </Accordion>
+  <Accordion title="Port 85 is already in use">
+    Another process is occupying port 85. Stop that process or temporarily change the port in `backend/index.js` and update `VITE_API_URL` in the frontend accordingly.
+  </Accordion>
+  <Accordion title="LDAP authentication errors on login">
+    Confirm the OpenLDAP container is running with `docker ps`. The container must expose port `389`. You can restart it with `npm run openldap:dev:up` from the `backend` directory.
+  </Accordion>
+</AccordionGroup>

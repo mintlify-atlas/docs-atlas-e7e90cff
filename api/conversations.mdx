@@ -1,0 +1,342 @@
+---
+title: "Conversations"
+description: "Support conversations between users and admins. Includes both the conversation thread endpoints and the nested message endpoints. Real-time messaging is handled via Socket.IO."
+---
+
+
+## Overview
+
+A **Conversation** represents a support thread opened by a user. A conversation has a `type` categorising the topic and belongs to one user. Messages inside a conversation are managed through the `/api/conversationMessages` sub-resource.
+
+| Conversation type | Description |
+|-------------------|-------------|
+| `soporte de cuenta` | Account support |
+| `reportar una incidencia` | Report an incident |
+| `recursos de accesibilidad` | Accessibility resources |
+| `consulta general` | General enquiry |
+
+<Info>
+Socket.IO events `newMessage`, `messageEdited`, and `messageDeleted` are emitted to the room identified by the conversation ID (as a string) when messages change.
+</Info>
+
+---
+
+## Conversations
+
+### POST /api/conversations
+
+Open a new support conversation.
+
+**Auth:** `verifyToken` — JWT Bearer token required
+
+#### Request body
+
+<ParamField body="type" type="string" required>
+  Conversation category. One of: `soporte de cuenta`, `reportar una incidencia`, `recursos de accesibilidad`, `consulta general`.
+</ParamField>
+
+#### Response `201`
+
+<ResponseField name="id" type="integer">Conversation ID.</ResponseField>
+<ResponseField name="userId" type="integer">ID of the user who opened the conversation.</ResponseField>
+<ResponseField name="type" type="string">Conversation type.</ResponseField>
+<ResponseField name="createdAt" type="string">Creation timestamp.</ResponseField>
+<ResponseField name="updatedAt" type="string">Last update timestamp.</ResponseField>
+
+#### Example
+
+```bash
+curl -X POST https://canaccesible.es/api/conversations \
+  -H "Authorization: Bearer eyJhbGci..." \
+  -H "Content-Type: application/json" \
+  -d '{"type": "soporte de cuenta"}'
+```
+
+#### Errors
+
+| Status | Message |
+|--------|---------|
+| `400` | `type is required` |
+| `403` | `Token not provided.` |
+
+---
+
+### GET /api/conversations
+
+List conversations. Admins receive all conversations; regular users receive only their own.
+
+**Auth:** `verifyToken`
+
+#### Response `200`
+
+Array of conversation objects.
+
+#### Example
+
+```bash
+curl https://canaccesible.es/api/conversations \
+  -H "Authorization: Bearer eyJhbGci..."
+```
+
+---
+
+### GET /api/conversations/:id
+
+Retrieve a single conversation. Only the conversation owner or an admin can access it.
+
+**Auth:** `verifyToken`
+
+#### Path parameters
+
+<ParamField path="id" type="integer" required>
+  ID of the conversation.
+</ParamField>
+
+#### Response `200`
+
+A single conversation object.
+
+#### Example
+
+```bash
+curl https://canaccesible.es/api/conversations/10 \
+  -H "Authorization: Bearer eyJhbGci..."
+```
+
+#### Errors
+
+| Status | Message |
+|--------|---------|
+| `403` | `You do not have permission to access this conversation.` |
+| `404` | `Conversation not found.` |
+
+---
+
+### DELETE /api/conversations/:id
+
+Delete a conversation. Only the conversation owner or an admin can delete it.
+
+**Auth:** `verifyToken`
+
+#### Path parameters
+
+<ParamField path="id" type="integer" required>
+  ID of the conversation to delete.
+</ParamField>
+
+#### Response `200`
+
+```json
+{ "message": "Conversation deleted successfully." }
+```
+
+#### Example
+
+```bash
+curl -X DELETE https://canaccesible.es/api/conversations/10 \
+  -H "Authorization: Bearer eyJhbGci..."
+```
+
+#### Errors
+
+| Status | Message |
+|--------|---------|
+| `400` | `Conversations cannot be updated.` (if PUT is attempted) |
+| `403` | `You do not have permission to delete this conversation.` |
+| `404` | `Conversation not found.` |
+
+---
+
+## Conversation messages
+
+Messages live inside a conversation and are scoped by `conversationId` in the URL. When retrieving all messages for a conversation, unread messages from other senders are automatically marked as `seen: true`.
+
+### POST /api/conversationMessages/:conversationId
+
+Send a message in a conversation.
+
+**Auth:** `verifyToken`
+
+#### Path parameters
+
+<ParamField path="conversationId" type="integer" required>
+  ID of the conversation to post into.
+</ParamField>
+
+#### Request body
+
+<ParamField body="message" type="string" required>
+  Message text.
+</ParamField>
+
+#### Response `201`
+
+<ResponseField name="id" type="integer">Message ID.</ResponseField>
+<ResponseField name="conversationId" type="integer">Parent conversation ID.</ResponseField>
+<ResponseField name="senderId" type="integer">ID of the sender.</ResponseField>
+<ResponseField name="message" type="string">Message text.</ResponseField>
+<ResponseField name="dateMessage" type="string">Date of the message (YYYY-MM-DD).</ResponseField>
+<ResponseField name="seen" type="boolean">Whether the message has been read. Defaults to `false`.</ResponseField>
+
+#### Example
+
+```bash
+curl -X POST https://canaccesible.es/api/conversationMessages/10 \
+  -H "Authorization: Bearer eyJhbGci..." \
+  -H "Content-Type: application/json" \
+  -d '{"message": "Buenos días, necesito ayuda con mi cuenta."}'
+```
+
+#### Errors
+
+| Status | Message |
+|--------|---------|
+| `400` | `conversationId and message are required.` |
+| `403` | `You do not have permission to send messages in this conversation.` |
+| `404` | `Conversation not found.` |
+
+---
+
+### GET /api/conversationMessages/:conversationId
+
+Retrieve all messages in a conversation, ordered oldest first. Also marks unread messages from other senders as seen.
+
+**Auth:** `verifyToken`
+
+#### Path parameters
+
+<ParamField path="conversationId" type="integer" required>
+  ID of the conversation.
+</ParamField>
+
+#### Response `200`
+
+Array of message objects, each including a nested `sender` object.
+
+<ResponseField name="sender" type="object">
+  <Expandable title="properties">
+    <ResponseField name="id" type="integer">Sender's user ID.</ResponseField>
+    <ResponseField name="firstName" type="string">Sender's first name.</ResponseField>
+    <ResponseField name="lastName" type="string">Sender's last name.</ResponseField>
+    <ResponseField name="nameFile" type="string | null">Sender's profile image URL.</ResponseField>
+    <ResponseField name="role" type="object">
+      <Expandable title="properties">
+        <ResponseField name="role" type="string">Role string of the sender.</ResponseField>
+      </Expandable>
+    </ResponseField>
+  </Expandable>
+</ResponseField>
+
+#### Example
+
+```bash
+curl https://canaccesible.es/api/conversationMessages/10 \
+  -H "Authorization: Bearer eyJhbGci..."
+```
+
+#### Errors
+
+| Status | Message |
+|--------|---------|
+| `403` | `You do not have permission to view messages in this conversation.` |
+| `404` | `Conversation not found.` |
+
+---
+
+### GET /api/conversationMessages/:conversationId/:id
+
+Retrieve a single message. Accessible by the conversation owner, the message sender, or an admin.
+
+**Auth:** `verifyToken`
+
+#### Path parameters
+
+<ParamField path="conversationId" type="integer" required>Parent conversation ID.</ParamField>
+<ParamField path="id" type="integer" required>Message ID.</ParamField>
+
+#### Example
+
+```bash
+curl https://canaccesible.es/api/conversationMessages/10/3 \
+  -H "Authorization: Bearer eyJhbGci..."
+```
+
+#### Errors
+
+| Status | Message |
+|--------|---------|
+| `403` | `You do not have permission to view this message.` |
+| `404` | `Conversation not found.` / `Message not found.` |
+
+---
+
+### PUT /api/conversationMessages/:conversationId/:id
+
+Edit a message. Only the original sender can edit their message.
+
+**Auth:** `verifyToken`
+
+#### Path parameters
+
+<ParamField path="conversationId" type="integer" required>Parent conversation ID.</ParamField>
+<ParamField path="id" type="integer" required>Message ID to update.</ParamField>
+
+#### Request body
+
+<ParamField body="message" type="string" required>
+  Updated message text.
+</ParamField>
+
+#### Response `200`
+
+The updated message object.
+
+#### Example
+
+```bash
+curl -X PUT https://canaccesible.es/api/conversationMessages/10/3 \
+  -H "Authorization: Bearer eyJhbGci..." \
+  -H "Content-Type: application/json" \
+  -d '{"message": "Texto actualizado."}'
+```
+
+#### Errors
+
+| Status | Message |
+|--------|---------|
+| `400` | `The message field is required.` |
+| `403` | `You do not have permission to edit this message.` |
+| `404` | `Conversation not found.` / `Message not found.` |
+
+---
+
+### DELETE /api/conversationMessages/:conversationId/:id
+
+Delete a message. Only the original sender can delete their message.
+
+**Auth:** `verifyToken`
+
+#### Path parameters
+
+<ParamField path="conversationId" type="integer" required>Parent conversation ID.</ParamField>
+<ParamField path="id" type="integer" required>Message ID to delete.</ParamField>
+
+#### Response `200`
+
+```json
+{ "message": "Message deleted successfully." }
+```
+
+#### Example
+
+```bash
+curl -X DELETE https://canaccesible.es/api/conversationMessages/10/3 \
+  -H "Authorization: Bearer eyJhbGci..."
+```
+
+#### Errors
+
+| Status | Message |
+|--------|---------|
+| `403` | `You do not have permission to delete this message.` |
+| `404` | `Conversation not found.` / `Message not found.` |

@@ -1,0 +1,123 @@
+---
+title: "Team workflow"
+description: "Git branching strategy, development workflow, environment configuration, and code standards for the CanAccesible team."
+---
+
+This page outlines the development workflow, version control strategy, and collaboration standards used by the **CanAccesible** team.
+
+---
+
+## Methodology
+
+The team follows an **Agile/Scrum** methodology, organizing work in **Sprints**.
+
+- **Task management:** GitHub Projects — backlog, active tasks, and progress tracking.
+- **Sprints:** Each sprint delivers a specific set of features or improvements.
+
+---
+
+## Branching strategy
+
+The project uses a simplified **Gitflow** workflow.
+
+<CardGroup cols={2}>
+  <Card title="main" icon="check-circle">
+    Production-ready code. Updated at the end of each sprint with a merge from `develop`.
+  </Card>
+  <Card title="develop" icon="git-branch">
+    Main integration branch. All features and fixes merge here first. Represents the latest development state.
+  </Card>
+  <Card title="feature/&lt;task-name&gt;" icon="git-branch">
+    Created from `develop`. Used for a specific feature or task. Deleted after merging.
+
+    Examples: `feature/login-page`, `feature/map-component`
+  </Card>
+  <Card title="Releases" icon="tag">
+    At the end of a sprint, `develop` is merged into `main` to mark a new version.
+  </Card>
+</CardGroup>
+
+---
+
+## Development workflow
+
+<Steps>
+  <Step title="Select a task">
+    Pick a task from the **GitHub Projects** board and move it to **In Progress**.
+  </Step>
+
+  <Step title="Create a feature branch">
+    Always branch from `develop`:
+
+    ```bash
+    git checkout develop
+    git pull origin develop
+    git checkout -b feature/my-new-feature
+    ```
+  </Step>
+
+  <Step title="Develop and commit">
+    Work on the feature locally. Aim for **atomic, descriptive commits**:
+
+    ```bash
+    git add .
+    git commit -m "feat: add login form validation"
+    ```
+
+    English is preferred for commit messages and code comments.
+  </Step>
+
+  <Step title="Push and open a pull request">
+    Push the branch to GitHub:
+
+    ```bash
+    git push origin feature/my-new-feature
+    ```
+
+    Open a **Pull Request** on GitHub targeting the `develop` branch.
+  </Step>
+
+  <Step title="Review and merge">
+    After approval, merge the PR into `develop` and delete the feature branch.
+  </Step>
+
+  <Step title="Release (end of sprint)">
+    When a sprint is complete and `develop` is stable, merge `develop` into `main` to mark the new version.
+  </Step>
+</Steps>
+
+---
+
+## Environment configuration
+
+Configuration is managed through `.env` files in the **backend**. These files are **never committed** to the repository.
+
+| File | Used when | Purpose |
+| :--- | :--- | :--- |
+| `.env.development` | `npm run dev` | Local development credentials and settings |
+| `.env.production` | `npm start` / production server | Live application credentials |
+| `.env.example` | — | Template for onboarding new developers |
+
+<Warning>
+  `.env.development` and `.env.production` are excluded from version control via `.gitignore`. Never commit secrets to the repository.
+</Warning>
+
+---
+
+## Production access
+
+All team members have access to the **DigitalOcean** team account, which hosts:
+
+- **Droplet** — the production server
+- **Spaces** — image CDN storage
+- **Managed MySQL** — the production database
+
+---
+
+## Code standards
+
+| Standard | Details |
+| :--- | :--- |
+| Language | English for code comments and commit messages |
+| Formatting | **Prettier** and **ESLint** enforce consistent code style |
+| Editor config | `.editorconfig` maintains consistent indentation and charset across editors |

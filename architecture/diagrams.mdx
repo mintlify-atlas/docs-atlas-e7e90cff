@@ -1,0 +1,233 @@
+---
+title: "System diagrams"
+description: "Database entity relationships and model schemas for the CanAccesible platform."
+---
+
+This page describes the CanAccesible data model and the relationships between every Sequelize model. The database runs on MySQL 8 and all schema changes are versioned as Sequelize migrations in `backend/migrations/`.
+
+## Model inventory
+
+The platform defines 16 Sequelize models across three responsibility areas:
+
+| Model | Table | Owner |
+|---|---|---|
+| `Role` | `Roles` | Jonathan |
+| `User` | `Users` | Jonathan |
+| `Notification` | `Notifications` | Jonathan |
+| `IncidentComment` | `IncidentComments` | Jonathan |
+| `Incident` | `Incidents` | Iriome |
+| `IncidentStatus` | `IncidentStatuses` | Iriome |
+| `IncidentType` | `IncidentTypes` | Iriome |
+| `IncidentSeverity` | `IncidentSeverities` | Iriome |
+| `IncidentLike` | `IncidentLikes` | Iriome |
+| `IncidentFollow` | `IncidentFollows` | Iriome |
+| `Conversation` | `Conversations` | Carlos |
+| `ConversationMessage` | `ConversationMessages` | Carlos |
+| `BlogArticle` | `BlogArticles` | Carlos |
+| `Log` | `Logs` | Carlos |
+| `PushSubscription` | `PushSubscriptions` | — |
+| `Session` | `Sessions` | — |
+
+## Entity-relationship overview
+
+```
+Role ──< User >──< Incident >──< IncidentComment
+                    │
+                    ├──< IncidentLike
+                    ├──< IncidentFollow
+                    │
+                    ├── IncidentStatus
+                    ├── IncidentSeverity
+                    └── IncidentType
+
+User >──< Notification
+User >──< Conversation >──< ConversationMessage
+User >──< Log
+User >──< PushSubscription
+
+BlogArticle  (standalone — no FK relations)
+```
+
+## Model schemas
+
+### Role
+
+Lookup table for user permission levels.
+
+| Column | Type | Notes |
+|---|---|---|
+| `id` | INTEGER | Primary key, auto-increment |
+| `role` | ENUM | `usuario`, `admin`, `municipio` — unique |
+
+**Associations**: `Role` has many `User` records (`roleId`).
+
+---
+
+### User
+
+Core identity record. Passwords are stored in OpenLDAP, not here.
+
+| Column | Type | Notes |
+|---|---|---|
+| `id` | INTEGER | Primary key, auto-increment |
+| `firstName` | STRING | Required |
+| `lastName` | STRING | Required |
+| `email` | STRING | Required, unique |
+| `dateRegister` | DATEONLY | Default: now |
+| `roleId` | INTEGER | FK → `Roles.id`, required |
+| `nameFile` | STRING | Avatar image filename in Spaces |
+| `resetPasswordToken` | STRING | Nullable, used during password reset flow |
+| `resetPasswordExpires` | DATE | Nullable, token expiry timestamp |
+
+**Associations**:
+- `User` belongs to `Role`
+- `User` has many `Incident`, `IncidentComment`, `IncidentLike`, `IncidentFollow`
+- `User` has many `Notification`, `Conversation`, `ConversationMessage` (as sender)
+- `User` has many `Log`, `PushSubscription`
+
+---
+
+### Incident
+
+The primary content entity. Represents a reported accessibility barrier or good practice.
+
+| Column | Type | Notes |
+|---|---|---|
+| `id` | INTEGER | Primary key, auto-increment |
+| `userId` | INTEGER | FK → `Users.id`, required |
+| `incidentStatusId` | INTEGER | FK → `IncidentStatuses.id`, required |
+| `incidentSeverityId` | INTEGER | FK → `IncidentSeverities.id`, nullable |
+| `incidentTypeId` | INTEGER | FK → `IncidentTypes.id`, required |
+| `name` | STRING | Required |
+| `description` | TEXT | Required |
+| `island` | ENUM | `Gran Canaria`, `Tenerife`, `La Gomera`, `Lanzarote`, `Fuerteventura`, `El Hierro`, `La Palma` |
+| `area` | ENUM | `movilidad`, `sensorial`, `arquitectura`, `transporte`, `otro` |
+| `address` | STRING | Human-readable address from Nominatim reverse geocoding |
+| `latitude` | DECIMAL(10,8) | Required |
+| `longitude` | DECIMAL(11,8) | Required |
+| `dateIncident` | DATEONLY | Nullable |
+| `nameFile` | STRING | Image filename in DigitalOcean Spaces, required |
+| `isApproved` | BOOLEAN | Default: `false` — admin approval gate |
+
+**Associations**: belongs to `User`, `IncidentStatus`, `IncidentSeverity`, `IncidentType`; has many `IncidentComment`, `IncidentLike`, `IncidentFollow`.
+
+---
+
+### IncidentComment
+
+| Column | Type | Notes |
+|---|---|---|
+| `id` | INTEGER | Primary key |
+| `userId` | INTEGER | FK → `Users.id` |
+| `incidentId` | INTEGER | FK → `Incidents.id` |
+| `comment` | TEXT | Required |
+| `dateComment` | DATE | Default: now |
+
+---
+
+### IncidentLike
+
+| Column | Type | Notes |
+|---|---|---|
+| `id` | INTEGER | Primary key |
+| `incidentId` | INTEGER | FK → `Incidents.id` |
+| `userId` | INTEGER | FK → `Users.id` |
+| `dateLike` | DATEONLY | Default: now |
+
+---
+
+### IncidentFollow
+
+| Column | Type | Notes |
+|---|---|---|
+| `id` | INTEGER | Primary key |
+| `userId` | INTEGER | FK → `Users.id` |
+| `incidentId` | INTEGER | FK → `Incidents.id` |
+| `dateFollowed` | DATEONLY | Default: now |
+
+---
+
+### Notification
+
+In-app notifications triggered by user actions across multiple entities.
+
+| Column | Type | Notes |
+|---|---|---|
+| `id` | INTEGER | Primary key |
+| `userId` | INTEGER | FK → `Users.id` — recipient |
+| `entity` | ENUM | `User`, `Incident`, `IncidentComment`, `IncidentLike`, `IncidentFollow`, `Blog`, `Conversation`, `ConversationMessage` |
+| `entityId` | INTEGER | ID of the related entity |
+| `message` | TEXT | Notification body text |
+| `dateNotification` | DATEONLY | Default: now |
+
+---
+
+### Conversation
+
+Support threads opened by users with administrators.
+
+| Column | Type | Notes |
+|---|---|---|
+| `id` | INTEGER | Primary key |
+| `userId` | INTEGER | FK → `Users.id` |
+| `type` | ENUM | `soporte de cuenta`, `reportar una incidencia`, `recursos de accesibilidad`, `consulta general` |
+
+**Associations**: belongs to `User`; has many `ConversationMessage`.
+
+---
+
+### ConversationMessage
+
+| Column | Type | Notes |
+|---|---|---|
+| `id` | INTEGER | Primary key |
+| `conversationId` | INTEGER | FK → `Conversations.id` |
+| `senderId` | INTEGER | FK → `Users.id` |
+| `message` | TEXT | Required |
+| `dateMessage` | DATEONLY | Default: now |
+| `seen` | BOOLEAN | Default: `false` — read receipt flag |
+
+---
+
+### BlogArticle
+
+Standalone articles authored by admins. No foreign-key relations to other models.
+
+| Column | Type | Notes |
+|---|---|---|
+| `id` | INTEGER | Primary key |
+| `title` | STRING | Required |
+| `description` | TEXT | Required |
+| `content` | TEXT | Required — full article body |
+| `dateCreation` | DATEONLY | Default: now |
+| `nameFile` | STRING | Cover image filename in Spaces |
+
+---
+
+### Log
+
+Audit trail for all significant actions performed on any entity.
+
+| Column | Type | Notes |
+|---|---|---|
+| `id` | INTEGER | Primary key |
+| `userId` | INTEGER | FK → `Users.id` — actor |
+| `action` | STRING | Description of the action performed |
+| `entity` | ENUM | `User`, `Incident`, `IncidentComment`, `IncidentLike`, `IncidentFollow`, `BlogArticle`, `Notification`, `Conversation`, `ConversationMessage` |
+| `entityId` | INTEGER | ID of the affected entity |
+| `dateLog` | DATE | Default: now |
+
+---
+
+### PushSubscription
+
+Stores browser push subscription objects per user.
+
+| Column | Type | Notes |
+|---|---|---|
+| `userId` | INTEGER | FK → `Users.id` |
+| `endpoint` | TEXT | Push service endpoint URL |
+| `p256dh` | STRING | Browser public key |
+| `auth` | STRING | Auth secret for the subscription |
+
+**Associations**: belongs to `User`.

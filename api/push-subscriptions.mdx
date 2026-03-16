@@ -1,0 +1,133 @@
+---
+title: "Push subscriptions"
+description: "Register and remove Web Push (VAPID) subscriptions so users receive native browser push notifications when platform events occur."
+---
+
+
+## Overview
+
+CanAccesible uses the [Web Push Protocol](https://www.rfc-editor.org/rfc/rfc8030) with **VAPID** authentication to deliver native push notifications.
+
+The flow is:
+
+1. **Browser** calls `PushManager.subscribe({ userVisibleOnly: true, applicationServerKey: <VAPID_PUBLIC_KEY> })` to obtain a `PushSubscription` object.
+2. **Client** sends the subscription object (containing `endpoint`, `keys.p256dh`, and `keys.auth`) to `POST /api/push/subscribe`.
+3. **Server** stores the subscription associated with the authenticated user.
+4. **Server** calls `web-push.sendNotification()` when an event occurs (e.g., new message, incident update).
+5. **Browser** receives the notification. If the subscription becomes invalid (HTTP 410/404 from the push service), the server automatically removes it.
+
+<Info>
+A user can have multiple active subscriptions — one per browser/device. Subscribing with the same `endpoint` twice is idempotent and returns `200` rather than creating a duplicate.
+</Info>
+
+<Tip>
+To obtain the VAPID public key for the `applicationServerKey` in the browser, contact the platform administrator or check the frontend environment configuration.
+</Tip>
+
+---
+
+## POST /api/push/subscribe
+
+Register a Web Push subscription for the authenticated user.
+
+**Auth:** `verifyToken` — JWT Bearer token required
+
+### Request body
+
+The complete `PushSubscription` object returned by `PushManager.subscribe()` in the browser.
+
+<ParamField body="endpoint" type="string" required>
+  The push service endpoint URL for this subscription. Unique per browser registration.
+</ParamField>
+
+<ParamField body="keys" type="object" required>
+  Encryption keys for the push message.
+  <Expandable title="properties">
+    <ParamField body="p256dh" type="string" required>
+      The P-256 Diffie-Hellman public key, base64url-encoded.
+    </ParamField>
+    <ParamField body="auth" type="string" required>
+      A 16-byte cryptographically random value, base64url-encoded. Used as an authentication secret.
+    </ParamField>
+  </Expandable>
+</ParamField>
+
+### Response `201`
+
+Returned when the subscription is newly saved.
+
+```json
+{ "message": "Subscription saved successfully." }
+```
+
+### Response `200`
+
+Returned when the same endpoint is already registered for this user — no duplicate is created.
+
+```json
+{ "message": "Subscription already exists." }
+```
+
+### Example
+
+```bash
+curl -X POST https://canaccesible.es/api/push/subscribe \
+  -H "Authorization: Bearer eyJhbGci..." \
+  -H "Content-Type: application/json" \
+  -d '{
+    "endpoint": "https://fcm.googleapis.com/fcm/send/fxxx...",
+    "keys": {
+      "p256dh": "BNcRdreALR...",
+      "auth": "tBHItJI5svbpez7KI4CCXg"
+    }
+  }'
+```
+
+### Errors
+
+| Status | Message |
+|--------|---------|
+| `400` | `Invalid subscription object.` |
+| `401` | `Invalid token.` |
+| `403` | `Token not provided.` |
+
+---
+
+## POST /api/push/unsubscribe
+
+Remove a push subscription for the authenticated user.
+
+**Auth:** `verifyToken` — JWT Bearer token required
+
+### Request body
+
+<ParamField body="endpoint" type="string" required>
+  The endpoint URL of the subscription to remove. Must match an existing subscription for the authenticated user.
+</ParamField>
+
+### Response `200`
+
+```json
+{ "message": "Unsubscribed successfully." }
+```
+
+<Note>
+If no matching subscription is found for the user/endpoint pair the operation still returns `200` — no error is raised.
+</Note>
+
+### Example
+
+```bash
+curl -X POST https://canaccesible.es/api/push/unsubscribe \
+  -H "Authorization: Bearer eyJhbGci..." \
+  -H "Content-Type: application/json" \
+  -d '{"endpoint": "https://fcm.googleapis.com/fcm/send/fxxx..."}'
+```
+
+### Errors
+
+| Status | Message |
+|--------|---------|
+| `400` | `Endpoint is required.` |
+| `401` | `Invalid token.` |
+| `403` | `Token not provided.` |

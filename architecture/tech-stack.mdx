@@ -1,0 +1,151 @@
+---
+title: "Tech stack"
+description: "Deep-dive into every technology layer — version pinning, configuration details, and why each tool was chosen."
+---
+
+This page explains the rationale behind each technology choice and documents the specific versions and configuration patterns used in CanAccesible.
+
+## Frontend
+
+### React 19 (`react@^19.1.1`)
+
+React is the primary UI library. Version 19 is used for its concurrent rendering improvements and the new React Compiler optimizations. The application is a Single Page Application (SPA) — React Router DOM handles all navigation client-side, avoiding full-page reloads.
+
+### Vite 7 (`vite@^7.1.7`)
+
+Vite replaces the traditional webpack-based bundler. It provides sub-second hot module replacement (HMR) during development and fast production builds via Rollup. The `@vitejs/plugin-react-swc` plugin uses SWC (Rust-based compiler) for the fastest possible JSX transform.
+
+### TailwindCSS 4 (`tailwindcss@^4.1.16`)
+
+Tailwind's utility-first approach lets you compose designs directly in JSX without switching between files. Version 4 integrates with Vite through the official `@tailwindcss/vite` plugin, eliminating the need for a separate PostCSS pipeline.
+
+### Zustand 5 (`zustand@^5.0.8`)
+
+Zustand was chosen over Redux for its minimal boilerplate and small bundle size. Stores live in `src/stores/` and hold the authenticated user object, UI preferences, and other shared state. The Zustand `persist` middleware can optionally sync state to `localStorage`.
+
+### React Router DOM 7 (`react-router-dom@^7.9.4`)
+
+Handles all client-side routing. Route definitions live in `src/routes/`. Protected routes are wrapped with an auth guard that reads the Zustand user store.
+
+### Socket.io Client 4 (`socket.io-client@^4.8.1`)
+
+Establishes a persistent WebSocket connection to the backend Socket.io server. Used for the real-time support chat between users and administrators.
+
+### Leaflet 1.9 & React Leaflet 5 (`leaflet@^1.9.4`, `react-leaflet@^5.0.0`)
+
+Leaflet renders the interactive map that shows all approved incidents pinned to their GPS coordinates. React Leaflet provides declarative React bindings. Map tiles are loaded from OpenStreetMap.
+
+### react-i18next 16 (`react-i18next@^16.5.0`, `i18next@^25.7.2`)
+
+Manages pre-translated Spanish/English strings for all static UI text (labels, buttons, error messages). Translations are stored in `public/locales/{lang}/translation.json` and loaded asynchronously by `i18next-http-backend`. Language detection is handled by `i18next-browser-languagedetector`. This differs from the MyMemory API, which translates dynamic user-generated content on demand.
+
+---
+
+## Backend
+
+### Express 5 (`express@^5.1.0`)
+
+Express 5 introduces native async/await error propagation — unhandled promise rejections in route handlers are automatically forwarded to error middleware, removing the need for explicit `try/catch` wrappers on every async handler. The server is defined in `backend/index.js` and listens on port **85**.
+
+### Sequelize 6 ORM (`sequelize@^6.37.7`, `mysql2@^3.15.3`)
+
+Sequelize abstracts all MySQL interactions through JavaScript model classes. Schema changes are tracked as numbered migration files in `backend/migrations/` and applied with the Sequelize CLI (`npx sequelize-cli db:migrate`). The `connect-session-sequelize` package persists `express-session` data in the `Sessions` MySQL table.
+
+The database connection is initialized in `backend/db.js` and imported by `backend/models/index.js`, which registers all 16 models and runs their `associate()` methods to set up foreign-key relationships.
+
+### Dual authentication — JWT + Sessions
+
+CanAccesible implements two authentication strategies simultaneously:
+
+**JWT (`jsonwebtoken@^9.0.2`)** — Stateless tokens signed with `JWT_SECRET`. Issued on login and validated per-request by a middleware in `backend/middlewares/`. Suitable for API clients and mobile integrations.
+
+**Sessions (`express-session@^1.18.2`)** — Stateful server-side sessions stored in MySQL via `connect-session-sequelize@^8.0.2`. Session cookies have a 24-hour `maxAge`, `httpOnly: true`, and `sameSite: "lax"`. Used by the admin dashboard (EJS views).
+
+### Socket.io 4 (`socket.io@^4.8.1`)
+
+Socket.io is attached to the same HTTP server as Express in `backend/index.js`:
+
+```js
+const server = http.createServer(app);
+const io = initSocket(server);
+```
+
+Event handlers live in `backend/sockets/`. The service is initialized in `backend/services/socket.service.js`. Socket.io enables real-time bidirectional messaging for the user–admin support chat feature.
+
+### Web Push VAPID (`web-push@^3.6.7`)
+
+The `web-push` library sends server-initiated push notifications to subscribed browsers. VAPID (Voluntary Application Server Identification) authenticates the application server to the push service. The public and private VAPID keys are generated once with `web-push generate-vapid-keys` and stored in `VAPID_PUBLIC_KEY` / `VAPID_PRIVATE_KEY`. Browser push subscriptions (endpoint, `p256dh`, `auth`) are persisted in the `PushSubscriptions` MySQL table.
+
+### OpenLDAP integration (`ldapjs@^3.0.7`)
+
+User credentials are stored in OpenLDAP, not in MySQL. The `ldapjs` library binds to the LDAP server using the admin DN and password, then verifies user credentials during login. In development, the `osixia/openldap` Docker image (configured in `docker-compose.yml`) bootstraps the directory from `ldap/data.ldif`. Passwords are hashed with SSHA (Salted SHA).
+
+### Multer 2 & DigitalOcean Spaces (`multer@^2.0.2`, `multer-s3@^3.0.1`, `@aws-sdk/client-s3@^3.928.0`)
+
+File uploads use Multer as the `multipart/form-data` parser. The `multer-s3` storage engine streams files directly from the incoming request to DigitalOcean Spaces using the AWS SDK S3 client (Spaces exposes an S3-compatible API). Images are never written to the application server's disk.
+
+### Resend 6.7 (`resend@^6.7.0`)
+
+Resend is used for all transactional emails (welcome, password reset). It was chosen for its deliverability, simple SDK, and webhook support. The API key is stored in `RESEND_API`.
+
+### EJS 3 (`ejs@^3.1.10`)
+
+EJS is the template engine for the server-rendered admin dashboard. Views are stored in `backend/views/` and static assets (CSS, images) in `backend/public/`. The view engine is configured in `backend/index.js`:
+
+```js
+app.set("view engine", "ejs");
+app.set("views", path.join(__dirname, "views"));
+```
+
+---
+
+## Infrastructure
+
+### Docker & Docker Compose
+
+OpenLDAP runs inside a Docker container to keep the directory service isolated from the host system and reproducible across developer machines. The `docker-compose.yml` at the repo root defines the development container; `docker-compose.test.yml` defines a parallel container for the test suite.
+
+```yaml
+services:
+  openldap:
+    image: osixia/openldap:latest
+    container_name: openldap
+    environment:
+      LDAP_ORGANISATION: "CanAccesible"
+      LDAP_DOMAIN: "canaccesible.es"
+      LDAP_ADMIN_PASSWORD: "admin"
+    ports:
+      - "389:389"
+      - "636:636"
+    volumes:
+      - ./ldap/data.ldif:/container/service/slapd/assets/config/bootstrap/ldif/custom/data.ldif
+      - ldap_data:/var/lib/ldap
+      - ldap_config:/etc/ldap/slapd.d
+```
+
+### Nginx
+
+In production, Nginx acts as the reverse proxy in front of both the React static build and the Express API. It handles TLS termination with certificates issued by Let's Encrypt and renewed automatically by Certbot.
+
+---
+
+## Testing
+
+### Backend: Jest 29 + Supertest 7
+
+```json
+"jest": "^29.7.0",
+"supertest": "^7.0.1"
+```
+
+Jest runs the backend test suite. Supertest makes HTTP requests directly against the Express `server` export from `backend/index.js` without binding to a port. The test environment uses a separate MySQL database (`db_canaccesible_test`) and a dedicated OpenLDAP container started via `npm run test:setup`.
+
+### Frontend: Vitest 4 + React Testing Library 16
+
+```json
+"vitest": "^4.0.16",
+"@testing-library/react": "^16.3.0",
+"jsdom": "^27.3.0"
+```
+
+Vitest re-uses the Vite configuration to run tests at near-native speed. React Testing Library renders components into a JSDOM environment and provides user-event utilities for realistic interaction testing. Coverage reports are generated with `@vitest/coverage-v8`.

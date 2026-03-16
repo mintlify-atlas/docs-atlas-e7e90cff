@@ -1,0 +1,327 @@
+---
+title: "Users"
+description: "Create and manage user accounts. Most endpoints require authentication; list and filter endpoints are restricted to admins (roleId 2)."
+---
+
+
+<Info>
+All endpoints under `/api/users` except `POST /api/users` require either a valid JWT Bearer token or an active session cookie (`verifyTokenOrSession`).
+</Info>
+
+---
+
+## POST /api/users
+
+Create a new user account. This is the public registration endpoint.
+
+**Auth:** None  
+**Content-Type:** `multipart/form-data` (image upload optional)
+
+### Request body
+
+<ParamField body="firstName" type="string" required>
+  User's first name.
+</ParamField>
+
+<ParamField body="lastName" type="string" required>
+  User's last name.
+</ParamField>
+
+<ParamField body="email" type="string" required>
+  Valid email address. Must be unique across all users.
+</ParamField>
+
+<ParamField body="password" type="string" required>
+  Plain-text password. Stored via LDAP (not in the relational database).
+</ParamField>
+
+<ParamField body="roleId" type="integer" required>
+  Role to assign: `1` (usuario), `2` (admin), `3` (municipio).
+</ParamField>
+
+<ParamField body="image" type="file">
+  Optional profile picture. Uploaded to object storage; the resulting URL is stored in `nameFile`.
+</ParamField>
+
+### Response `201`
+
+The newly created user object.
+
+<ResponseField name="id" type="integer">Generated user ID.</ResponseField>
+<ResponseField name="firstName" type="string">First name.</ResponseField>
+<ResponseField name="lastName" type="string">Last name.</ResponseField>
+<ResponseField name="email" type="string">Email address.</ResponseField>
+<ResponseField name="roleId" type="integer">Role ID.</ResponseField>
+<ResponseField name="nameFile" type="string | null">URL of the uploaded profile image, or `null`.</ResponseField>
+<ResponseField name="dateRegister" type="string">ISO date of registration (defaults to today).</ResponseField>
+
+### Example
+
+```bash
+curl -X POST https://canaccesible.es/api/users \
+  -F "firstName=Carlos" \
+  -F "lastName=Pérez" \
+  -F "email=carlos@example.com" \
+  -F "password=SecretPass1" \
+  -F "roleId=1" \
+  -F "image=@/path/to/photo.jpg"
+```
+
+### Errors
+
+| Status | Message |
+|--------|---------|
+| `400` | `Missing required fields: firstName, lastName, email, password, roleId` |
+| `400` | `Email format is invalid` |
+
+---
+
+## GET /api/users
+
+List all users in the system.
+
+**Auth:** `verifyTokenOrSession`  
+**Permission:** Admin only (`roleId === 2`)
+
+### Response `200`
+
+Array of user objects. Each item contains:
+
+<ResponseField name="id" type="integer">User ID.</ResponseField>
+<ResponseField name="firstName" type="string">First name.</ResponseField>
+<ResponseField name="lastName" type="string">Last name.</ResponseField>
+<ResponseField name="email" type="string">Email address.</ResponseField>
+<ResponseField name="dateRegister" type="string">Registration date (YYYY-MM-DD).</ResponseField>
+<ResponseField name="roleId" type="integer">Role ID.</ResponseField>
+<ResponseField name="nameFile" type="string | null">Profile image URL.</ResponseField>
+
+### Example
+
+```bash
+curl https://canaccesible.es/api/users \
+  -H "Authorization: Bearer eyJhbGci..."
+```
+
+### Errors
+
+| Status | Message |
+|--------|---------|
+| `403` | `You don't have permission to access this resource` |
+
+---
+
+## GET /api/users/user
+
+List all users with role `usuario` (roleId = 1).
+
+**Auth:** `verifyTokenOrSession`  
+**Permission:** Admin only
+
+### Response `200`
+
+Array of user objects (same fields as `GET /api/users`).
+
+### Example
+
+```bash
+curl https://canaccesible.es/api/users/user \
+  -H "Authorization: Bearer eyJhbGci..."
+```
+
+---
+
+## GET /api/users/admin
+
+List all users with role `admin` (roleId = 2).
+
+**Auth:** `verifyTokenOrSession`  
+**Permission:** Admin only
+
+### Example
+
+```bash
+curl https://canaccesible.es/api/users/admin \
+  -H "Authorization: Bearer eyJhbGci..."
+```
+
+---
+
+## GET /api/users/municipalities
+
+List all users with role `municipio` (roleId = 3).
+
+**Auth:** `verifyTokenOrSession`  
+**Permission:** Admin only
+
+### Example
+
+```bash
+curl https://canaccesible.es/api/users/municipalities \
+  -H "Authorization: Bearer eyJhbGci..."
+```
+
+---
+
+## GET /api/users/top-reporting
+
+List all users ordered by the number of incidents they have reported (descending). Useful for admin dashboards.
+
+**Auth:** `verifyTokenOrSession`  
+**Permission:** Admin only
+
+### Response `200`
+
+Array of user objects with an additional field:
+
+<ResponseField name="incidenceCount" type="string">
+  Total number of incidents reported by the user (returned as a string by the SQL aggregate function).
+</ResponseField>
+
+### Example
+
+```bash
+curl https://canaccesible.es/api/users/top-reporting \
+  -H "Authorization: Bearer eyJhbGci..."
+```
+
+```json
+[
+  {
+    "id": 7,
+    "firstName": "Ana",
+    "lastName": "Martín",
+    "email": "ana@example.com",
+    "dateRegister": "2024-01-15",
+    "roleId": 1,
+    "nameFile": null,
+    "incidenceCount": "14"
+  }
+]
+```
+
+---
+
+## GET /api/users/:id
+
+Get a single user by their ID.
+
+**Auth:** `verifyTokenOrSession`  
+**Permission:** The user themselves, or an admin.
+
+### Path parameters
+
+<ParamField path="id" type="integer" required>
+  ID of the user to retrieve.
+</ParamField>
+
+### Response `200`
+
+<ResponseField name="firstName" type="string">First name.</ResponseField>
+<ResponseField name="lastName" type="string">Last name.</ResponseField>
+<ResponseField name="nameFile" type="string | null">Profile image URL.</ResponseField>
+
+### Example
+
+```bash
+curl https://canaccesible.es/api/users/42 \
+  -H "Authorization: Bearer eyJhbGci..."
+```
+
+### Errors
+
+| Status | Message |
+|--------|---------|
+| `403` | `You don't have permission to access this user` |
+| `404` | `User not found` |
+
+---
+
+## PUT /api/users/:id
+
+Update a user's profile. A user may update their own profile; only admins can change the `roleId`.
+
+**Auth:** `verifyTokenOrSession`  
+**Content-Type:** `multipart/form-data`
+
+### Path parameters
+
+<ParamField path="id" type="integer" required>
+  ID of the user to update.
+</ParamField>
+
+### Request body (all fields optional)
+
+<ParamField body="firstName" type="string">
+  Updated first name.
+</ParamField>
+
+<ParamField body="lastName" type="string">
+  Updated last name.
+</ParamField>
+
+<ParamField body="email" type="string">
+  Updated email address.
+</ParamField>
+
+<ParamField body="roleId" type="integer">
+  New role ID. Only honoured when the requester is an admin.
+</ParamField>
+
+<ParamField body="image" type="file">
+  Replacement profile image. The old image is deleted from object storage.
+</ParamField>
+
+### Response `200`
+
+The updated user object.
+
+### Example
+
+```bash
+curl -X PUT https://canaccesible.es/api/users/42 \
+  -H "Authorization: Bearer eyJhbGci..." \
+  -F "firstName=María" \
+  -F "image=@/path/to/new_photo.jpg"
+```
+
+### Errors
+
+| Status | Message |
+|--------|---------|
+| `400` | `First name cannot be empty` / `Last name cannot be empty` / `Email cannot be empty` |
+| `403` | `You do not have permission to perform this action` |
+| `404` | `User not found` |
+
+---
+
+## DELETE /api/users/:id
+
+Permanently delete a user account. A user may delete their own account; admins may delete any account.
+
+**Auth:** `verifyTokenOrSession`
+
+### Path parameters
+
+<ParamField path="id" type="integer" required>
+  ID of the user to delete.
+</ParamField>
+
+### Response `200`
+
+```json
+{ "message": "User and associated image have been deleted successfully" }
+```
+
+### Example
+
+```bash
+curl -X DELETE https://canaccesible.es/api/users/42 \
+  -H "Authorization: Bearer eyJhbGci..."
+```
+
+### Errors
+
+| Status | Message |
+|--------|---------|
+| `403` | `You don't have permission to perform this action` |
+| `404` | `User not found` |

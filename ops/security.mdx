@@ -1,0 +1,181 @@
+---
+title: "Security guide"
+description: "Authentication strategies, security middlewares, CORS configuration, password hashing, SSL/TLS, cookie security, file uploads, and monitoring in CanAccesible."
+---
+
+This guide covers all security protocols, middlewares, and measures implemented in **CanAccesible** to protect user data, ensure system integrity, and prevent unauthorized access.
+
+---
+
+## Authentication & authorization
+
+CanAccesible implements a **multi-strategy authentication system** to handle different client types: the React frontend, mobile apps, and the admin dashboard.
+
+<CardGroup cols={2}>
+  <Card title="JWT (stateless)" icon="key">
+    Primary method for the React frontend and mobile clients. Clients receive a token upon login and send it as `Authorization: Bearer <token>` on subsequent requests.
+  </Card>
+  <Card title="Sessions (stateful)" icon="database">
+    Used for the server-rendered admin dashboard (EJS views). A session cookie (`connect.sid`) is set in the browser; session data is stored in MySQL.
+  </Card>
+  <Card title="Hybrid" icon="shuffle">
+    Dual-check strategy for endpoints accessible by both the public frontend (JWT) and the admin dashboard (Session), such as incident management.
+  </Card>
+  <Card title="Password hashing" icon="lock">
+    Passwords are never stored in plain text. LDAP's built-in **SSHA (Salted SHA)** algorithm is used to hash passwords during user creation.
+  </Card>
+</CardGroup>
+
+---
+
+## Security middlewares
+
+Custom middlewares protect API routes. They are located in `backend/middlewares/auth.middleware.js` and `backend/index.js`.
+
+<AccordionGroup>
+  <Accordion title="verifyToken — Stateless API protection">
+    **Purpose:** Protects stateless API endpoints.
+
+    **Logic:**
+    1. Extracts the token from the `Authorization` header.
+    2. Verifies the token signature using the secret key.
+    3. Decodes the user payload and attaches it to `req.user`.
+
+    **Responses:**
+    - `403` — token is missing.
+    - `401` — token is invalid or expired.
+  </Accordion>
+
+  <Accordion title="verifySession — Dashboard route protection">
+    **Purpose:** Protects internal routes and dashboard views.
+
+    **Logic:** Checks if `req.session.userId` exists.
+
+    **Response:** Returns `403` if the session is invalid or expired.
+  </Accordion>
+
+  <Accordion title="verifyAdmin — Role-based access control">
+    **Purpose:** Role-based access control (RBAC) for administrative actions.
+
+    **Logic:**
+    1. Verifies that a valid session exists.
+    2. Checks if `req.session.role` is strictly equal to `'admin'`.
+    3. Fetches fresh user data from the database to ensure permissions are up to date.
+
+    **Response:** Redirects to home or shows an error page if the user is not an admin.
+  </Accordion>
+
+  <Accordion title="verifyTokenOrSession — Hybrid access">
+    **Purpose:** Provides flexibility for shared resources.
+
+    **Logic:**
+    1. Checks for a Bearer token first. If present and valid, authenticates via JWT.
+    2. If no token is found, falls back to checking for an active session.
+
+    **Use case:** Used on routes like `POST /api/incidents` so that both a mobile user (token) and an admin on the dashboard (session) can create incidents.
+  </Accordion>
+</AccordionGroup>
+
+---
+
+## CORS configuration
+
+The custom CORS middleware in `backend/index.js` controls which domains can access the API.
+
+```javascript
+app.use((req, res, next) => {
+  const allowedOrigins = [
+    'https://canaccesible.es',
+    'https://www.canaccesible.es',
+    'http://localhost:5173',
+    'http://localhost:85',
+  ];
+  const origin = req.headers.origin;
+  if (allowedOrigins.includes(origin)) {
+    res.setHeader('Access-Control-Allow-Origin', origin);
+  }
+  res.setHeader('Access-Control-Allow-Credentials', 'true');
+  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
+  next();
+});
+```
+
+| Setting | Value |
+| :--- | :--- |
+| Production origins | `https://canaccesible.es`, `https://www.canaccesible.es` |
+| Development origins | `http://localhost:5173`, `http://localhost:85` |
+| Credentials | `Access-Control-Allow-Credentials: true` (required for session cookies) |
+| Methods | `GET, POST, PUT, DELETE, OPTIONS` |
+
+<Warning>
+  Never add untrusted origins to `allowedOrigins`. Doing so would allow cross-origin requests from those domains, bypassing this protection.
+</Warning>
+
+---
+
+## Data protection
+
+### Environment variables
+
+Sensitive information (database credentials, API keys, JWT secrets) is stored in `.env` files and **never committed to the repository**.
+
+- **`.env.development`** — local development credentials.
+- **`.env.production`** — production credentials.
+- A **`.env.example`** template is provided for onboarding.
+
+<Warning>
+  The `.env.production` file must be excluded from version control via `.gitignore`. Committing secrets to a public repository is a critical security incident.
+</Warning>
+
+### Database security
+
+- **Managed MySQL** on DigitalOcean with automated backups.
+- The backend connects using **SSL** (`DB_SSL=true`) to encrypt data in transit.
+- **Sessions** are stored in the `Sessions` MySQL table (not in-memory), ensuring persistence and security.
+
+---
+
+## Network security
+
+### SSL/TLS (HTTPS)
+
+All traffic is encrypted using **TLS**, handled by the **Nginx reverse proxy** with a **Let's Encrypt** certificate. See [Domain & DNS setup](/ops/domain-dns) for the full configuration.
+
+### Cookie security
+
+| Flag | Value | Purpose |
+| :--- | :--- | :--- |
+| `httpOnly` | `true` | Prevents JavaScript from accessing the cookie, blocking XSS attacks |
+| `sameSite` | `lax` | Balances CSRF protection with usability |
+
+---
+
+## File security
+
+### Secure uploads (Multer S3)
+
+User-uploaded files are sent directly to **DigitalOcean Spaces** (S3-compatible) using `multer-s3`.
+
+<CardGroup cols={2}>
+  <Card title="Off-server storage" icon="cloud-upload">
+    Files are never written to the application server's file system, eliminating local file inclusion (LFI) risks.
+  </Card>
+  <Card title="Safe naming" icon="file">
+    Files are renamed with a timestamp prefix (`Date.now() + "-" + originalName`) to prevent filename collisions and guessable filenames.
+  </Card>
+</CardGroup>
+
+---
+
+## Monitoring & alerts
+
+### Login notifications
+
+The system sends an **email alert** upon each successful login to notify users of potential unauthorized access.
+
+### Log management
+
+- **PM2** manages application logs in production.
+- The `logCleanup.service` scheduled task automatically purges logs older than 30 days to prevent storage exhaustion.
+
+See [Logging system](/ops/logging) for full details.

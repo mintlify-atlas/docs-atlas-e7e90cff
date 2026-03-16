@@ -1,0 +1,206 @@
+---
+title: "Blog articles"
+description: "Manage blog articles published on the CanAccesible platform. Reading is public; creating, updating, and deleting require an active admin session."
+---
+
+
+<Warning>
+Write operations (`POST`, `PUT`, `DELETE`) use `verifySession` middleware, which requires an active admin **session cookie** (`connect.sid`), not a JWT. These endpoints are intended for use from the admin panel web interface.
+</Warning>
+
+---
+
+## GET /api/blogArticles
+
+List all published blog articles, ordered by `dateCreation` ascending.
+
+**Auth:** None
+
+### Response `200`
+
+Array of blog article objects.
+
+<ResponseField name="id" type="integer">Article ID.</ResponseField>
+<ResponseField name="title" type="string">Article title.</ResponseField>
+<ResponseField name="description" type="string">Short description / excerpt.</ResponseField>
+<ResponseField name="content" type="string">Full article body (plain text or HTML).</ResponseField>
+<ResponseField name="dateCreation" type="string">Publication date (YYYY-MM-DD).</ResponseField>
+<ResponseField name="nameFile" type="string">URL of the article's cover image stored in object storage.</ResponseField>
+
+### Example
+
+```bash
+curl https://canaccesible.es/api/blogArticles
+```
+
+---
+
+## GET /api/blogArticles/:id
+
+Retrieve a single blog article by ID.
+
+**Auth:** None
+
+### Path parameters
+
+<ParamField path="id" type="integer" required>
+  ID of the blog article.
+</ParamField>
+
+### Response `200`
+
+A single blog article object (same fields as `GET /api/blogArticles`).
+
+### Example
+
+```bash
+curl https://canaccesible.es/api/blogArticles/5
+```
+
+```json
+{
+  "id": 5,
+  "title": "Accesibilidad en playas canarias",
+  "description": "Un repaso a las mejoras realizadas en las playas de Gran Canaria.",
+  "content": "<p>Las playas canarias han experimentado...</p>",
+  "dateCreation": "2025-04-20",
+  "nameFile": "https://cdn.canaccesible.es/blog/playa-accesible.jpg"
+}
+```
+
+### Errors
+
+| Status | Message |
+|--------|---------|
+| `404` | `Blog article not found.` |
+
+---
+
+## POST /api/blogArticles
+
+Create a new blog article. Restricted to admin users via session authentication.
+
+**Auth:** `verifySession` — admin session cookie required  
+**Content-Type:** `multipart/form-data`
+
+### Request body
+
+<ParamField body="title" type="string" required>
+  Article title.
+</ParamField>
+
+<ParamField body="description" type="string" required>
+  Short description or excerpt shown in article listings.
+</ParamField>
+
+<ParamField body="content" type="string" required>
+  Full article body.
+</ParamField>
+
+<ParamField body="dateCreation" type="string" required>
+  Publication date in `YYYY-MM-DD` format.
+</ParamField>
+
+<ParamField body="image" type="file" required>
+  Cover image for the article. Stored in object storage; the resulting URL is saved in `nameFile`.
+</ParamField>
+
+### Response `201`
+
+The newly created blog article object.
+
+### Example
+
+```bash
+curl -X POST https://canaccesible.es/api/blogArticles \
+  -b "connect.sid=s%3Axxx..." \
+  -F "title=Accesibilidad en playas canarias" \
+  -F "description=Un repaso a las mejoras realizadas en las playas." \
+  -F "content=Las playas canarias han experimentado grandes mejoras..." \
+  -F "dateCreation=2025-04-20" \
+  -F "image=@/path/to/cover.jpg"
+```
+
+### Errors
+
+| Status | Message |
+|--------|---------|
+| `400` | `title is required` / `description is required` / `content is required` / `dateCreation is required` / `Image is required` |
+| `403` | `You do not have permission to create blog articles.` |
+
+---
+
+## PUT /api/blogArticles/:id
+
+Update an existing blog article. All fields are optional — only provided fields are updated.
+
+**Auth:** `verifySession` — admin session cookie required  
+**Content-Type:** `multipart/form-data`
+
+### Path parameters
+
+<ParamField path="id" type="integer" required>
+  ID of the article to update.
+</ParamField>
+
+### Request body (all optional)
+
+<ParamField body="title" type="string">Updated title.</ParamField>
+<ParamField body="description" type="string">Updated description.</ParamField>
+<ParamField body="content" type="string">Updated article body.</ParamField>
+<ParamField body="dateCreation" type="string">Updated publication date (YYYY-MM-DD).</ParamField>
+<ParamField body="image" type="file">Replacement cover image. The old file is deleted from storage.</ParamField>
+
+### Response `200`
+
+The updated blog article object.
+
+### Example
+
+```bash
+curl -X PUT https://canaccesible.es/api/blogArticles/5 \
+  -b "connect.sid=s%3Axxx..." \
+  -F "title=Accesibilidad en playas canarias (actualizado)"
+```
+
+### Errors
+
+| Status | Message |
+|--------|---------|
+| `400` | `dateCreation must be a valid date` |
+| `403` | `You do not have permission to update blog articles.` |
+| `404` | `Blog article not found.` |
+
+---
+
+## DELETE /api/blogArticles/:id
+
+Delete a blog article and its associated cover image from storage.
+
+**Auth:** `verifySession` — admin session cookie required
+
+### Path parameters
+
+<ParamField path="id" type="integer" required>
+  ID of the article to delete.
+</ParamField>
+
+### Response `200`
+
+```json
+{ "message": "Blog article and its associated image have been deleted." }
+```
+
+### Example
+
+```bash
+curl -X DELETE https://canaccesible.es/api/blogArticles/5 \
+  -b "connect.sid=s%3Axxx..."
+```
+
+### Errors
+
+| Status | Message |
+|--------|---------|
+| `403` | `You do not have permission to delete blog articles.` |
+| `404` | `Blog article not found.` |

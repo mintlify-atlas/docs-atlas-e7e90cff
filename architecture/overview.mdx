@@ -1,0 +1,110 @@
+---
+title: "Architecture overview"
+description: "How the CanAccesible frontend, backend, database, LDAP server, and object storage fit together."
+---
+
+CanAccesible is a full-stack monorepo with a clear separation between the React SPA and the Express API. In production, Nginx routes requests to the correct layer. In development, the two servers run independently on different ports.
+
+## Request flow
+
+```
+Browser
+  │
+  ▼
+Nginx (reverse proxy, TLS termination)
+  ├── Static assets → React build (dist/)
+  └── /api/* → Express (port 85)
+               ├── Sequelize ORM → MySQL
+               ├── ldapjs        → OpenLDAP container
+               ├── @aws-sdk      → DigitalOcean Spaces
+               ├── web-push      → Browser Push Service
+               └── socket.io     → WebSocket clients
+```
+
+In development you access the React app directly at `http://localhost:5173` (Vite dev server) and the API at `http://localhost:85` (Express). Vite proxies are not used; the frontend reads `VITE_API_URL` and calls the backend directly.
+
+## Monorepo directory structure
+
+```
+CanAccesible/
+├── backend/
+│   ├── config/               # DB, JWT, mailer, Swagger, DO Spaces config
+│   ├── controllers/          # Request handlers for API and admin dashboard
+│   ├── middlewares/          # Auth and upload middlewares
+│   ├── migrations/           # Sequelize schema migrations
+│   ├── models/               # Sequelize model definitions
+│   ├── public/               # Static files (CSS, images for admin dashboard)
+│   ├── routes/               # Express route definitions
+│   ├── scripts/              # Utility scripts
+│   ├── seeders/              # Database seed data
+│   ├── services/             # Business logic (Socket.io, log cleanup, etc.)
+│   ├── sockets/              # Socket.io event handlers
+│   ├── tests/                # Backend Jest tests
+│   ├── views/                # EJS templates for admin dashboard
+│   ├── db.js                 # Sequelize connection instance
+│   ├── index.js              # Server entry point
+│   └── package.json
+│
+├── frontend/
+│   ├── public/               # Static assets served as-is
+│   └── src/
+│       ├── assets/           # Images and global styles
+│       ├── components/       # Reusable React components
+│       ├── layouts/          # Layout wrappers
+│       ├── pages/            # Page-level view components
+│       ├── routes/           # React Router configuration
+│       ├── services/         # Axios API service functions
+│       ├── stores/           # Zustand global state stores
+│       ├── tests/            # Vitest frontend tests
+│       ├── utils/            # Utility functions
+│       ├── App.jsx           # Root application component
+│       ├── i18n.js           # react-i18next configuration
+│       └── main.jsx          # Vite entry point
+│
+├── docs/                     # Documentation source files
+├── ldap/                     # OpenLDAP bootstrap LDIF files
+├── docker-compose.yml        # OpenLDAP container for development
+└── docker-compose.test.yml   # OpenLDAP container for the test suite
+```
+
+## Frontend layer
+
+The frontend is a Vite-powered React 19 SPA. Key responsibilities:
+
+- **Routing**: React Router DOM 7 handles all client-side navigation without page reloads.
+- **State**: Zustand stores hold the authenticated user session and application-wide preferences.
+- **API calls**: All HTTP requests are made through service modules in `src/services/` using Axios, pointing at `VITE_API_URL`.
+- **Real-time**: A Socket.io client connects to the backend WebSocket server for live chat and push notification updates.
+- **Map**: Leaflet and React Leaflet render the interactive incident map with markers for each reported location across the Canary Islands.
+- **i18n**: `react-i18next` loads translation files from `public/locales/{lang}/translation.json` for Spanish/English UI text.
+
+## Backend layer
+
+The backend is an Express 5 application defined in `backend/index.js`. It:
+
+1. Creates an HTTP server and attaches the Socket.io instance.
+2. Configures CORS to allow requests from the frontend origin.
+3. Registers `express-session` with a Sequelize-backed session store (`connect-session-sequelize`).
+4. Mounts Swagger UI at `/api-docs`.
+5. Registers all API route modules (incidents, users, auth, blog, conversations, notifications, push subscriptions, logs).
+6. Authenticates the Sequelize database connection at startup.
+7. Schedules background tasks (log cleanup via `node-cron`) when `NODE_ENV` is not `test`.
+8. Listens on port **85**.
+
+Authentication supports two parallel strategies:
+- **JWT**: stateless tokens validated per-request via a middleware in `middlewares/`.
+- **Sessions**: stateful cookies backed by the `Sessions` MySQL table.
+
+## Database layer
+
+Sequelize 6 connects to MySQL 8 using the `mysql2` driver. All schema changes go through numbered migration files in `backend/migrations/`. Seed data is applied with `sequelize-cli db:seed:all`.
+
+The database holds 16 models. See [System diagrams](/architecture/diagrams) for the full entity-relationship breakdown.
+
+## OpenLDAP
+
+User passwords are stored in OpenLDAP, not in MySQL. The `osixia/openldap` Docker image bootstraps from `ldap/data.ldif` on first start. The backend uses `ldapjs` to bind and authenticate users against the directory. The Docker Compose service exposes ports `389` (LDAP) and `636` (LDAPS).
+
+## DigitalOcean Spaces
+
+User-uploaded images (incident photos, profile pictures) are stored in a DigitalOcean Spaces bucket. Multer S3 and the AWS SDK S3 client handle multipart form uploads directly from the Express API to the bucket. Images are served from the Spaces CDN URL rather than from the application server.

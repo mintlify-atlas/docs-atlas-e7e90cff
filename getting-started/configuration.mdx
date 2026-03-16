@@ -1,0 +1,140 @@
+---
+title: "Configuration"
+description: "Reference for all environment variables used by the CanAccesible backend and frontend."
+---
+
+CanAccesible uses `.env` files to manage configuration. The backend reads `.env.development` in development mode and `.env.production` in production. The frontend reads `.env.development`.
+
+<Warning>
+  Never commit `.env.development` or `.env.production` to version control. The repository provides `.env.example` as a safe template with no real credentials.
+</Warning>
+
+## Backend environment variables
+
+Create the backend configuration file by copying the example:
+
+```bash
+cd backend
+cp .env.example .env.development
+```
+
+### Application
+
+<ParamField path="NODE_ENV" type="string" required>
+  Runtime environment. Set to `development` for local work, `test` for running the test suite, or `production` for the live server. Controls which `.env.*` file is loaded and whether the server starts listening (tests skip the `listen` call).
+</ParamField>
+
+<ParamField path="FRONTEND_URL" type="string" required>
+  Full URL of the React frontend (e.g. `http://localhost:5173`). Added to the CORS allowed-origins list in `index.js` so the browser can call the API.
+</ParamField>
+
+### Database
+
+<ParamField path="DB_HOST" type="string" required default="localhost">
+  Hostname of the MySQL server. Use `localhost` for local development or the DigitalOcean Managed Database hostname in production.
+</ParamField>
+
+<ParamField path="DB_PORT" type="number" required default="3306">
+  Port the MySQL server listens on.
+</ParamField>
+
+<ParamField path="DB_USER" type="string" required default="root">
+  MySQL username used by Sequelize to connect to the database.
+</ParamField>
+
+<ParamField path="DB_PASS" type="string" required>
+  Password for the MySQL user. Set during MySQL installation.
+</ParamField>
+
+<ParamField path="DB_NAME" type="string" required default="db_canaccesible">
+  Name of the database. For the test environment use a different name (e.g. `db_canaccesible_test`) to keep test data isolated from development data.
+</ParamField>
+
+<ParamField path="DB_SSL" type="boolean" required default="false">
+  Enable SSL for the database connection. Set to `true` when connecting to DigitalOcean Managed Databases in production.
+</ParamField>
+
+### Authentication — JWT & sessions
+
+<ParamField path="JWT_SECRET" type="string" required>
+  Secret key used by `jsonwebtoken` to sign and verify JWT tokens. Use a long, random string. Never reuse secrets across environments.
+</ParamField>
+
+<ParamField path="SESSION_SECRET" type="string" required>
+  Secret key used by `express-session` to sign the session ID cookie. Should be different from `JWT_SECRET`.
+</ParamField>
+
+### DigitalOcean Spaces
+
+DigitalOcean Spaces is the S3-compatible object store used for incident images and user avatars. These variables are optional for local development if you do not need to test file uploads.
+
+<ParamField path="DO_ACCESS_KEY" type="string">
+  DigitalOcean Spaces API access key. Generated in the DigitalOcean control panel under **API → Spaces Keys**.
+</ParamField>
+
+<ParamField path="DO_SECRET_KEY" type="string">
+  DigitalOcean Spaces API secret key paired with `DO_ACCESS_KEY`.
+</ParamField>
+
+<ParamField path="DO_SPACE_NAME" type="string">
+  Name of the Spaces bucket (e.g. `canaccesible-media`).
+</ParamField>
+
+<ParamField path="DO_SPACE_ENDPOINT" type="string">
+  Regional endpoint URL for the Space (e.g. `https://ams3.digitaloceanspaces.com`).
+</ParamField>
+
+### Email — Resend
+
+<ParamField path="RESEND_API" type="string">
+  API key for the [Resend](https://resend.com) email platform. Used to send transactional emails such as welcome messages and password-reset links. Obtain this key from the Resend dashboard.
+</ParamField>
+
+### LDAP
+
+The OpenLDAP container is started by `npm run dev:setup` using the configuration in `docker-compose.yml`. These variables must match the values set in that file.
+
+<ParamField path="LDAP_URL" type="string" required default="ldap://localhost:389">
+  Connection URL for the LDAP server. During local development the OpenLDAP Docker container exposes port `389`.
+</ParamField>
+
+<ParamField path="LDAP_BASE_DN" type="string" required default="dc=canaccesible,dc=es">
+  Base Distinguished Name for the LDAP directory tree. All user entries live under this DN.
+</ParamField>
+
+<ParamField path="LDAP_ADMIN_DN" type="string" required default="cn=admin,dc=canaccesible,dc=es">
+  DN of the LDAP admin account used by the backend to bind to the directory and perform user management operations.
+</ParamField>
+
+<ParamField path="LDAP_ADMIN_PASSWORD" type="string" required default="admin">
+  Password for the LDAP admin account. Change this from the default `admin` in production.
+</ParamField>
+
+### Web Push — VAPID
+
+VAPID keys identify the application server when sending push notifications. Generate a key pair once with the `web-push` CLI (`web-push generate-vapid-keys`) and store them permanently — changing them invalidates all existing push subscriptions.
+
+<ParamField path="VAPID_PUBLIC_KEY" type="string" required>
+  Public VAPID key shared with the browser when registering a push subscription. Also served by the frontend service worker.
+</ParamField>
+
+<ParamField path="VAPID_PRIVATE_KEY" type="string" required>
+  Private VAPID key used by the `web-push` library on the server to sign push notification payloads.
+</ParamField>
+
+## Frontend environment variables
+
+Create the frontend configuration file:
+
+```bash
+cd frontend
+cp .env.example .env.development
+```
+
+<ParamField path="VITE_API_URL" type="string" required default="http://localhost:85">
+  Base URL of the Express backend API. Vite exposes this at runtime as `import.meta.env.VITE_API_URL`. All Axios requests in `src/services/` use this value as their base URL.
+</ParamField>
+
+<Note>
+  Vite only exposes variables prefixed with `VITE_` to the browser bundle. Any variable without this prefix remains server-side only and will be `undefined` in the React code.
+</Note>

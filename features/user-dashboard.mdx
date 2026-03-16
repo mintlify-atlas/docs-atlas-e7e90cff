@@ -1,0 +1,154 @@
+---
+title: "User dashboard"
+description: "Personal dashboard where you view your reported incidents, track approval status, monitor recent notifications, and manage your profile."
+---
+
+The user dashboard at `/dashboard` is your personal control centre. It requires authentication — unauthenticated visitors are redirected to `/login`.
+
+## What the dashboard shows
+
+<CardGroup cols={2}>
+  <Card title="Published incidents" icon="circle-check">
+    A count of your incidents that have been approved and are publicly visible on the platform.
+  </Card>
+  <Card title="Pending approval" icon="clock">
+    A count of your incidents still awaiting admin review (`isApproved: false`).
+  </Card>
+  <Card title="Recent notifications" icon="bell">
+    In-app notifications from the last 7 days — incident updates, follow alerts, and system messages.
+  </Card>
+  <Card title="Most supported incidents" icon="heart">
+    A bar chart of your top 5 incidents ranked by like count, relative to the most-liked incident.
+  </Card>
+</CardGroup>
+
+## Loading dashboard data
+
+The dashboard makes two parallel API calls on mount:
+
+```js
+// DashboardUser.jsx
+const [incidentsData, notificationsData] = await Promise.all([
+  getMyIncidents(),       // GET /api/incidents/my-incidents
+  getAllNotifications(),  // GET /api/notifications
+]);
+```
+
+### `GET /api/incidents/my-incidents`
+
+Returns all incidents belonging to the authenticated user. Requires a JWT Bearer token (`verifyToken`).
+
+```bash
+curl https://canaccesible.es/api/incidents/my-incidents \
+  -H "Authorization: Bearer <token>"
+```
+
+### `GET /api/notifications`
+
+Returns all in-app notifications for the authenticated user. Requires a JWT Bearer token.
+
+```bash
+curl https://canaccesible.es/api/notifications \
+  -H "Authorization: Bearer <token>"
+```
+
+## Incident stats
+
+The dashboard calculates statistics from the incident list locally:
+
+| Stat | Condition |
+|---|---|
+| Published | `isApproved === true` |
+| Pending approval | `isApproved === false` |
+| Pending status | `incidentStatusId === 1` |
+| In progress status | `incidentStatusId === 2` |
+| Resolved status | `incidentStatusId === 3` |
+
+Click **View details** on a stat card to open a modal that lists the incidents in that category with their thumbnail, date, island, status chip, and action buttons.
+
+## Managing your incidents
+
+### Editing an incident
+
+<Steps>
+  <Step title="Open the incident list">
+    Click **View details** on the **Published** or **Pending approval** stat card.
+  </Step>
+  <Step title="Click Edit">
+    Click the **Edit** icon next to the incident you want to change. The `IncidentForm` modal opens pre-populated with the current values.
+  </Step>
+  <Step title="Save your changes">
+    Update the fields, optionally replace the photo, and submit the form.
+
+    ```bash
+    curl -X PUT https://canaccesible.es/api/incidents/:id \
+      -H "Authorization: Bearer <token>" \
+      -F "name=Updated name" \
+      -F "description=Updated description" \
+      -F "image=@/path/to/new-photo.jpg"
+    ```
+  </Step>
+  <Step title="Followers are notified">
+    After a successful update, the dashboard automatically fetches the list of followers and creates an in-app notification for each one.
+  </Step>
+</Steps>
+
+### Deleting an incident
+
+Click the **Delete** icon in the incident modal. A browser confirmation dialog appears before the delete request is sent.
+
+```bash
+curl -X DELETE https://canaccesible.es/api/incidents/:id \
+  -H "Authorization: Bearer <token>"
+```
+
+<Warning>
+Deletion is permanent. All associated comments, likes, and follows are removed along with the incident record.
+</Warning>
+
+## Updating your profile
+
+Profile information is managed via `PUT /api/users/:id`. The request accepts `multipart/form-data` so you can upload a new profile photo at the same time.
+
+```bash
+curl -X PUT https://canaccesible.es/api/users/42 \
+  -H "Authorization: Bearer <token>" \
+  -F "firstName=Jonathan" \
+  -F "lastName=Morera" \
+  -F "image=@/path/to/avatar.jpg"
+```
+
+The `User` model stores `firstName`, `lastName`, `email`, `roleId`, and an optional `nameFile` for the profile photo. Profile updates require `verifyTokenOrSession`.
+
+## Recent notifications
+
+The dashboard filters notifications to only those created within the last 7 days:
+
+```js
+// DashboardUser.jsx
+const recentNotifications = notifications.filter((n) => {
+  const date = new Date(n.createdAt);
+  const sevenDaysAgo = new Date();
+  sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
+  return date >= sevenDaysAgo;
+});
+```
+
+Each notification shows its message and the date it was created.
+
+## Tips for managing your incidents
+
+<AccordionGroup>
+  <Accordion title="My incident has been pending for a long time — what should I do?">
+    Incidents require manual admin approval. If your incident has been waiting a long time, use the **Live chat** feature to contact an administrator and ask for a status update.
+  </Accordion>
+  <Accordion title="Can I update an incident after it has been approved?">
+    Yes. You can edit any of your incidents at any time via the dashboard. Note that editing a published incident does not change its `isApproved` status — it remains visible. Followers will receive a notification about the update.
+  </Accordion>
+  <Accordion title="How is the 'most supported incidents' bar chart calculated?">
+    The dashboard takes your top 5 incidents sorted by `likesCount` descending. Each bar's width is proportional to the highest like count in that group, so the most-liked incident always fills 100% of the bar width.
+  </Accordion>
+  <Accordion title="Why don't I see notifications older than 7 days?">
+    The dashboard filters to the last 7 days for relevance. All notifications are still stored in the database and accessible via `GET /api/notifications` if you need to retrieve older records.
+  </Accordion>
+</AccordionGroup>

@@ -1,0 +1,172 @@
+---
+title: "Incident likes"
+description: "Like and unlike accessibility incidents. Each user can like a given incident only once. Like counts are broadcast in real time via Socket.IO."
+---
+
+
+<Info>
+When a like is created or deleted, the server emits an `incident:likes_update` Socket.IO event to the room `incident_<incidentId>` with the updated total count.
+</Info>
+
+<Note>
+The `PUT /api/incidentLikes/:id` endpoint always returns `403 Likes cannot be updated`. Likes are immutable — remove and re-create if needed.
+</Note>
+
+---
+
+## POST /api/incidentLikes
+
+Like an incident. Each user may like a given incident only once.
+
+**Auth:** `verifyToken` — JWT Bearer token required
+
+### Request body
+
+<ParamField body="incidentId" type="integer" required>
+  ID of the incident to like.
+</ParamField>
+
+<ParamField body="dateLike" type="string">
+  Date of the like in `YYYY-MM-DD` format. Defaults to today.
+</ParamField>
+
+### Response `201`
+
+<ResponseField name="id" type="integer">Like record ID.</ResponseField>
+<ResponseField name="incidentId" type="integer">ID of the liked incident.</ResponseField>
+<ResponseField name="userId" type="integer">ID of the user who liked it.</ResponseField>
+<ResponseField name="dateLike" type="string">Date the like was recorded (YYYY-MM-DD).</ResponseField>
+
+### Example
+
+```bash
+curl -X POST https://canaccesible.es/api/incidentLikes \
+  -H "Authorization: Bearer eyJhbGci..." \
+  -H "Content-Type: application/json" \
+  -d '{"incidentId": 17}'
+```
+
+### Errors
+
+| Status | Message |
+|--------|---------|
+| `400` | `incidentId is required` |
+| `400` | `You have already liked this incident.` |
+| `401` | `Invalid token.` |
+| `403` | `Token not provided.` |
+
+---
+
+## GET /api/incidentLikes
+
+Retrieve all like records across all incidents.
+
+**Auth:** None
+
+### Response `200`
+
+Array of like objects (id, incidentId, userId, dateLike).
+
+### Example
+
+```bash
+curl https://canaccesible.es/api/incidentLikes
+```
+
+---
+
+## GET /api/incidentLikes/:id
+
+Retrieve a single like record by its ID.
+
+**Auth:** None
+
+### Path parameters
+
+<ParamField path="id" type="integer" required>
+  ID of the like record.
+</ParamField>
+
+### Response `200`
+
+A single like object.
+
+### Example
+
+```bash
+curl https://canaccesible.es/api/incidentLikes/88
+```
+
+### Errors
+
+| Status | Message |
+|--------|---------|
+| `404` | `IncidentLike not found.` |
+
+---
+
+## GET /api/incidentLikes/incident/:incidentId/user/:userId
+
+Check whether a specific user has liked a specific incident. Useful for toggling the like button in the UI.
+
+**Auth:** None
+
+### Path parameters
+
+<ParamField path="incidentId" type="integer" required>
+  ID of the incident.
+</ParamField>
+
+<ParamField path="userId" type="integer" required>
+  ID of the user.
+</ParamField>
+
+### Response `200`
+
+The like record if found.
+
+### Example
+
+```bash
+curl https://canaccesible.es/api/incidentLikes/incident/17/user/42
+```
+
+### Errors
+
+| Status | Message |
+|--------|---------|
+| `404` | `Like not found for this user and incident.` |
+
+---
+
+## DELETE /api/incidentLikes/:id
+
+Unlike (remove a like from) an incident. Only the user who created the like can delete it.
+
+**Auth:** `verifyToken` — JWT Bearer token required
+
+### Path parameters
+
+<ParamField path="id" type="integer" required>
+  ID of the like record to delete.
+</ParamField>
+
+### Response `200`
+
+```json
+{ "message": "IncidentLike has been deleted." }
+```
+
+### Example
+
+```bash
+curl -X DELETE https://canaccesible.es/api/incidentLikes/88 \
+  -H "Authorization: Bearer eyJhbGci..."
+```
+
+### Errors
+
+| Status | Message |
+|--------|---------|
+| `403` | `You do not have permission to delete this like.` |
+| `404` | `IncidentLike not found.` |

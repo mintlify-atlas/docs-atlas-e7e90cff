@@ -1,0 +1,221 @@
+---
+title: "Frontend testing"
+description: "How to set up, run, and write tests for the CanAccesible frontend using Vitest and React Testing Library."
+---
+
+The frontend uses **Vitest** and **React Testing Library** for unit, component, and integration testing.
+
+---
+
+## Test structure
+
+Tests live in `frontend/src/tests/`:
+
+```
+frontend/src/tests/
+├── components.test.jsx   # Individual React component tests
+├── integration.test.jsx  # Multi-component flow and interaction tests
+└── unit.test.js          # Pure utility and helper function tests
+```
+
+---
+
+## Requirements
+
+- **Node.js** v18 or later (LTS recommended)
+- Dependencies installed:
+
+```bash
+cd frontend
+npm install
+```
+
+---
+
+## Vitest configuration
+
+Vitest is configured inside `vite.config.js`:
+
+```javascript
+export default defineConfig({
+  plugins: [react(), tailwindcss()],
+  server: {
+    host: true,
+    allowedHosts: ["canaccesible.es", "www.canaccesible.es", "localhost"],
+  },
+  test: {
+    environment: "jsdom",
+    globals: true,
+    setupFiles: "./src/setupTest.js",
+  },
+});
+```
+
+| Option | Value | Purpose |
+| :--- | :--- | :--- |
+| `environment` | `jsdom` | Simulates a browser DOM environment for React tests |
+| `globals` | `true` | Makes `describe`, `it`, `expect`, etc. available without imports |
+| `setupFiles` | `./src/setupTest.js` | Runs setup code (e.g., `@testing-library/jest-dom` matchers) before each test file |
+
+---
+
+## Running tests
+
+```bash
+# Run all tests
+npm test
+
+# Run in watch mode (re-runs on file save)
+npx vitest --watch
+
+# Run a specific file
+npx vitest src/tests/unit.test.js
+
+# Run tests matching a pattern
+npx vitest -t "should fetch all blog articles"
+```
+
+### Code coverage
+
+```bash
+# Using the npm script
+npm run coverage
+
+# Or directly with Vitest
+npx vitest run --coverage
+```
+
+The report is generated in `coverage/`. Open `coverage/index.html` in a browser for the full breakdown.
+
+---
+
+## Writing tests
+
+### AAA principle
+
+All tests follow the **Arrange – Act – Assert** structure:
+
+```javascript
+it("should fetch all blog articles successfully", async () => {
+  // ARRANGE
+  const mockArticles = [{ id: 1, title: "Article 1" }];
+  api.get.mockResolvedValue({ data: mockArticles });
+
+  // ACT
+  const result = await getAllBlogArticles();
+
+  // ASSERT
+  expect(api.get).toHaveBeenCalledWith("/blogArticles");
+  expect(result).toEqual(mockArticles);
+});
+```
+
+### Real project example — unit tests
+
+From `frontend/src/tests/unit.test.js`:
+
+```javascript
+import { describe, it, expect } from "vitest";
+import {
+  validateIncidentData,
+  startCoordinatesValidation,
+} from "../utils/incidentHelpers";
+
+describe("Unit Test: validateIncidentData", () => {
+  it("should return false for null, undefined or non-object input", () => {
+    expect(validateIncidentData(null)).toBe(false);
+    expect(validateIncidentData(undefined)).toBe(false);
+    expect(validateIncidentData("not an object")).toBe(false);
+  });
+
+  it("should return true for a valid incident object", () => {
+    const validIncident = {
+      name: "Broken Streetlight",
+      description: "Located at main street corner",
+      island: "Gran Canaria",
+    };
+    expect(validateIncidentData(validIncident)).toBe(true);
+  });
+});
+
+describe("Unit Test: startCoordinatesValidation (Parameterized)", () => {
+  it.each([
+    [90, 180, true],       // Valid: maximum limits
+    [999, 0, false],       // Invalid: latitude > 90
+    ["28.5", "-16.5", true], // Valid: parseable strings
+    ["abc", 0, false],    // Invalid: NaN latitude
+  ])(
+    "coordinates (lat: %s, lng: %s) should validate as %s",
+    (lat, lng, expected) => {
+      expect(startCoordinatesValidation(lat, lng)).toBe(expected);
+    }
+  );
+});
+```
+
+### Real project example — component tests
+
+From the frontend testing docs, a component test with interaction:
+
+```javascript
+it("should call translation service when translating", async () => {
+  // ARRANGE
+  mockStore.isTranslated.mockReturnValue(false);
+  TranslationService.translateText.mockResolvedValue("Translated");
+
+  // ACT
+  render(
+    <BrowserRouter>
+      <BlogCard article={mockArticle} />
+    </BrowserRouter>
+  );
+  fireEvent.click(screen.getByTitle("blog_card_translate_to_english"));
+
+  // ASSERT
+  await waitFor(() => {
+    expect(TranslationService.translateText).toHaveBeenCalled();
+  });
+});
+```
+
+---
+
+## Mocking
+
+### API mocking
+
+Mock the `api` service module to isolate components from real HTTP requests:
+
+```javascript
+vi.mock("../../services/api", () => ({
+  default: {
+    get: vi.fn(),
+    post: vi.fn(),
+    put: vi.fn(),
+    delete: vi.fn(),
+    defaults: { headers: { common: {} } },
+  },
+}));
+```
+
+### React dependency mocking
+
+```javascript
+vi.mock("react-i18next", () => ({
+  useTranslation: () => ({ t: (key) => key }),
+}));
+
+vi.mock("../../stores/blogTranslationStore", () => ({
+  useBlogTranslationStore: vi.fn(),
+}));
+```
+
+### Mock cleanup
+
+Clear all mocks before each test to avoid state leaking between tests:
+
+```javascript
+beforeEach(() => {
+  vi.clearAllMocks();
+});
+```

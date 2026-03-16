@@ -1,0 +1,330 @@
+---
+title: "OpenLDAP setup"
+description: "How OpenLDAP is used for centralized user authentication in CanAccesible, including Docker Compose setup, directory structure, and the backend authentication flow."
+---
+
+This page describes the OpenLDAP server used for centralized user management, authentication, and groups in **CanAccesible**.
+
+---
+
+## What OpenLDAP does in this project
+
+OpenLDAP acts as the **single source of truth for user authentication**. When a user logs in:
+
+1. The backend queries MySQL for the user record and role.
+2. The backend performs an LDAP **forward lookup** (finding the user's DN by email).
+3. The backend performs an LDAP **bind** (verifying the password against the LDAP server).
+
+User roles and profile data are stored in MySQL; passwords are validated exclusively through LDAP.
+
+---
+
+## Key LDAP concepts
+
+<AccordionGroup>
+  <Accordion title="Distinguished Name (DN)">
+    A DN is a unique identifier for each entry in the LDAP directory, similar to a full path in a file system. It is composed of Relative Distinguished Names (RDNs) separated by commas, read right to left.
+
+    Example: `uid=carlos,ou=users,dc=canaccesible,dc=es`
+
+    In CanAccesible, DNs are used to uniquely identify users and perform bind (authentication) operations.
+  </Accordion>
+
+  <Accordion title="Organizational Units (OU)">
+    OUs are containers used to organize directory entries logically — similar to folders in a file system.
+
+    CanAccesible uses four OUs:
+    - `ou=users` — standard platform users
+    - `ou=admins` — system administrators
+    - `ou=towns` — municipality representatives
+    - `ou=groups` — security groups and roles
+  </Accordion>
+
+  <Accordion title="LDAP filters">
+    Filters are expressions used to search for entries in the directory.
+
+    - `(uid=carlos)` — find entries where `uid` equals `carlos`
+    - `(|(uid=carlos)(mail=user@example.com))` — find entries where `uid` is `carlos` OR `mail` matches
+
+    In CanAccesible, filters are used in search operations to locate users by email or UID during login.
+  </Accordion>
+
+  <Accordion title="Forward vs. reverse lookup">
+    **Forward lookup:** Search for a user entry based on a known attribute (e.g., email) to retrieve their DN. Used during login to find the DN before binding.
+
+    **Reverse lookup:** Search for groups based on a user's UID (finding which groups a user belongs to). Defined in the backend but not currently used in the authentication flow — roles are retrieved from MySQL instead.
+  </Accordion>
+
+  <Accordion title="Authentication (Bind)">
+    The credential-validation process in LDAP is called a **Bind**. The backend first performs a forward lookup to retrieve the user's DN, then sends the DN and password to the LDAP server for verification.
+
+    ```javascript
+    async authenticateByEmail(searchValue, password) {
+      const user = await this.forwardLookup(searchValue);
+      if (!user) {
+        return { success: false, message: 'User not found' };
+      }
+      return await this.authenticate(user.dn, password);
+    }
+    ```
+  </Accordion>
+
+  <Accordion title="LDIF (LDAP Data Interchange Format)">
+    LDIF is a standard text format for representing LDAP directory entries and changes. In CanAccesible, LDIF files bootstrap the initial directory data (organizational units, groups) when the container starts.
+  </Accordion>
+</AccordionGroup>
+
+---
+
+## Docker Compose setup
+
+OpenLDAP runs as a Docker container, defined in `docker-compose.yml` at the project root.
+
+```yaml
+services:
+  openldap:
+    image: osixia/openldap:latest
+    container_name: openldap
+    restart: unless-stopped
+    environment:
+      LDAP_ORGANISATION: "CanAccesible"
+      LDAP_DOMAIN: "canaccesible.es"
+      LDAP_ADMIN_PASSWORD: "admin"
+    ports:
+      - "389:389"
+      - "636:636"
+    volumes:
+      - ./ldap/data.ldif:/container/service/slapd/assets/config/bootstrap/ldif/custom/data.ldif
+      - ldap_data:/var/lib/ldap
+      - ldap_config:/etc/ldap/slapd.d
+    command: --copy-service
+    networks:
+      - canaccesible-network
+
+networks:
+  canaccesible-network:
+    driver: bridge
+
+volumes:
+  ldap_data:
+  ldap_config:
+```
+
+| Setting | Details |
+| :--- | :--- |
+| Image | `osixia/openldap:latest` |
+| Ports | `389` (LDAP), `636` (LDAPS) |
+| Bootstrap data | `./ldap/data.ldif` mounted into the container |
+| Persistent storage | Named volumes `ldap_data` and `ldap_config` |
+| Network | `canaccesible-network` bridge for isolation |
+| `--copy-service` | Ensures bootstrap LDIF data is loaded on start |
+
+<Warning>
+  The `LDAP_ADMIN_PASSWORD` in `docker-compose.yml` is used for local development. In production, set the admin password via `backend/.env.production` using the `LDAP_ADMIN_PASSWORD` variable.
+</Warning>
+
+### Starting the container
+
+<Steps>
+  <Step title="Navigate to the project root">
+    ```bash
+    cd CanAccesible
+    ```
+  </Step>
+
+  <Step title="Start OpenLDAP in detached mode">
+    ```bash
+    docker compose up -d
+    ```
+  </Step>
+
+  <Step title="Verify the container is running">
+    ```bash
+    docker ps
+    ```
+  </Step>
+
+  <Step title="Check startup logs if needed">
+    ```bash
+    docker compose logs openldap
+    ```
+  </Step>
+</Steps>
+
+---
+
+## Directory structure (LDIF)
+
+The initial directory structure is defined in `ldap/data.ldif`.
+
+### Organizational units
+
+```ldif
+dn: ou=users,dc=canaccesible,dc=es
+objectClass: organizationalUnit
+ou: users
+
+dn: ou=admins,dc=canaccesible,dc=es
+objectClass: organizationalUnit
+ou: admins
+
+dn: ou=towns,dc=canaccesible,dc=es
+objectClass: organizationalUnit
+ou: towns
+
+dn: ou=groups,dc=canaccesible,dc=es
+objectClass: organizationalUnit
+ou: groups
+```
+
+### Groups and roles
+
+```ldif
+dn: cn=usuario,ou=groups,dc=canaccesible,dc=es
+objectClass: posixGroup
+cn: usuario
+gidNumber: 1001
+
+dn: cn=admin,ou=groups,dc=canaccesible,dc=es
+objectClass: posixGroup
+cn: admin
+gidNumber: 1002
+
+dn: cn=municipio,ou=groups,dc=canaccesible,dc=es
+objectClass: posixGroup
+cn: municipio
+gidNumber: 1003
+```
+
+---
+
+## Backend environment variables
+
+Add these to `backend/.env.production` (and `.env.development` for local work):
+
+```env
+LDAP_URL=ldap://localhost:389
+LDAP_BASE_DN=dc=canaccesible,dc=es
+LDAP_ADMIN_DN=cn=admin,dc=canaccesible,dc=es
+LDAP_ADMIN_PASSWORD=your_ldap_admin_password
+```
+
+---
+
+## Authentication flow
+
+### Login
+
+When a user logs in, the backend in `auth.controller.js` follows this sequence:
+
+```javascript
+// 1. Query MySQL for user details and role
+const user = await User.findOne({
+  where: { email },
+  include: [{ model: db.role, as: "role" }],
+});
+
+// 2. Authenticate via LDAP
+const ldapResult = await userService.authenticate(email, password);
+```
+
+Inside `user.service.js`:
+
+```javascript
+async authenticate(email, password) {
+  const ldapUser = await this.forwardLookup(email);
+  if (!ldapUser) return null;
+  return await this.authenticate(ldapUser.dn, password);
+}
+```
+
+### Verifying a successful authentication
+
+Check the backend logs for this sequence:
+
+```
+[LDAP] Connected to server
+[LDAP] Bind successful: cn=admin,dc=canaccesible,dc=es
+[LDAP] Forward lookup for: ldap@gmail.com
+[LDAP] User found: uid=ldap@gmail.com,ou=users,dc=canaccesible,dc=es
+[LDAP] Connection closed
+[LDAP] Authenticating: uid=ldap@gmail.com,ou=users,dc=canaccesible,dc=es
+[LDAP] Connected to server
+[LDAP] Bind successful: uid=ldap@gmail.com,ou=users,dc=canaccesible,dc=es
+[LDAP] Authentication successful
+[LDAP] Connection closed
+```
+
+You can also verify authentication directly from the command line:
+
+```bash
+docker exec openldap ldapwhoami -x -H ldap://localhost \
+  -D "uid=ldap@gmail.com,ou=users,dc=canaccesible,dc=es" \
+  -w "user_password"
+```
+
+A successful response returns the authenticated DN.
+
+### Verify a user entry (forward lookup)
+
+```bash
+docker exec openldap ldapsearch -x -H ldap://localhost \
+  -b "dc=canaccesible,dc=es" \
+  -D "cn=admin,dc=canaccesible,dc=es" \
+  -w admin \
+  "(uid=ldap@gmail.com)"
+```
+
+### Verify group membership
+
+```bash
+docker exec openldap ldapsearch -x -H ldap://localhost \
+  -b "ou=groups,dc=canaccesible,dc=es" \
+  -D "cn=admin,dc=canaccesible,dc=es" \
+  -w admin \
+  "(memberUid=ldap@gmail.com)"
+```
+
+---
+
+## Troubleshooting
+
+<AccordionGroup>
+  <Accordion title="Container fails to start">
+    **Symptoms:** `docker compose up` fails or the container exits immediately.
+
+    **Common causes:** Port conflicts (389/636 in use), volume issues, or invalid environment variables.
+
+    **Resolution:**
+    ```bash
+    # Check startup logs
+    docker compose logs openldap
+
+    # Check if ports 389/636 are free
+    netstat -an | grep 389
+
+    # Restart cleanly
+    docker compose down && docker compose up -d
+    ```
+
+    Also verify that `./ldap/data.ldif` exists and is valid LDIF.
+  </Accordion>
+
+  <Accordion title="Group membership not found">
+    **Symptoms:** User is created but not assigned to a group, or reverse lookup fails.
+
+    **Common causes:** LDIF not loaded correctly, or `memberUid` attribute not set.
+
+    **Resolution:**
+    - Restart the container to reload LDIF changes.
+    - Check `/ldap/data.ldif` for correct `memberUid` entries.
+    - Test with:
+      ```bash
+      docker exec openldap ldapsearch -x -H ldap://localhost \
+        -b "ou=groups,dc=canaccesible,dc=es" \
+        -D "cn=admin,dc=canaccesible,dc=es" \
+        -w admin \
+        "(memberUid=user_uid)"
+      ```
+  </Accordion>
+</AccordionGroup>

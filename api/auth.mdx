@@ -1,0 +1,274 @@
+---
+title: "Authentication"
+description: "Sign in, sign out, and manage passwords. All authenticated endpoints require a JWT Bearer token unless noted otherwise."
+---
+
+
+## Overview
+
+CanAccesible uses two complementary authentication mechanisms:
+
+- **JWT Bearer token** — returned at sign-in and passed as an `Authorization` header. Required by `verifyToken` and `verifyTokenOrSession` middleware.
+- **Session cookie** — set automatically after sign-in via `connect.sid`. Required by `verifySession` middleware (admin panel endpoints).
+
+<Info>
+After a successful sign-in a login-detected email is sent to the user's address asynchronously via Resend. This does not block the response.
+</Info>
+
+### Using the token
+
+Include the JWT in **every** authenticated request:
+
+```bash
+Authorization: Bearer <jwt_token>
+```
+
+---
+
+## POST /api/auth/signin
+
+Authenticate a user and receive a JWT token. Credentials can be supplied either as a JSON body or via an HTTP Basic Auth header.
+
+**Auth:** None
+
+### Request body (JSON)
+
+<ParamField body="email" type="string" required>
+  The user's registered email address.
+</ParamField>
+
+<ParamField body="password" type="string" required>
+  The user's plain-text password. Validated against the LDAP directory.
+</ParamField>
+
+<Note>
+You may also pass credentials as an `Authorization: Basic <base64(email:password)>` header instead of a request body.
+</Note>
+
+### Response `200`
+
+<ResponseField name="message" type="string">
+  `"Successful login"`
+</ResponseField>
+
+<ResponseField name="user" type="object">
+  <Expandable title="properties">
+    <ResponseField name="id" type="integer">User's database ID.</ResponseField>
+    <ResponseField name="nombre" type="string">User's first name.</ResponseField>
+    <ResponseField name="email" type="string">User's email address.</ResponseField>
+    <ResponseField name="role" type="string">Role string: `usuario`, `admin`, or `municipio`.</ResponseField>
+  </Expandable>
+</ResponseField>
+
+<ResponseField name="token" type="string">
+  Signed JWT. Pass this as `Authorization: Bearer <token>` on subsequent requests.
+</ResponseField>
+
+### Example
+
+```bash
+curl -X POST https://canaccesible.es/api/auth/signin \
+  -H "Content-Type: application/json" \
+  -d '{"email": "maria@example.com", "password": "MyS3cur3Pass"}'
+```
+
+```json
+{
+  "message": "Successful login",
+  "user": {
+    "id": 42,
+    "nombre": "María",
+    "email": "maria@example.com",
+    "role": "usuario"
+  },
+  "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+}
+```
+
+### Errors
+
+| Status | Message |
+|--------|---------|
+| `400` | `Missing credentials. Please provide Basic Auth header or email/password in body.` |
+| `401` | `Invalid password` |
+| `404` | `User not found` |
+
+---
+
+## POST /api/auth/logout
+
+Destroy the server-side session and clear the `connect.sid` cookie. The JWT itself is stateless and remains valid until expiry; clients should discard it locally.
+
+**Auth:** None (operates on the session cookie)
+
+### Response `200`
+
+```json
+{ "message": "Session closed successfully" }
+```
+
+### Example
+
+```bash
+curl -X POST https://canaccesible.es/api/auth/logout \
+  -H "Cookie: connect.sid=s%3Axxx..."
+```
+
+---
+
+## POST /api/auth/forgot-password
+
+Request a password-reset link. If the email is found a reset token (valid for **1 hour**) is saved to the user record and a link is emailed via Resend.
+
+**Auth:** None
+
+### Request body
+
+<ParamField body="email" type="string" required>
+  Email address of the account to reset.
+</ParamField>
+
+### Response `200`
+
+```json
+{ "message": "Password reset email sent" }
+```
+
+### Example
+
+```bash
+curl -X POST https://canaccesible.es/api/auth/forgot-password \
+  -H "Content-Type: application/json" \
+  -d '{"email": "maria@example.com"}'
+```
+
+### Errors
+
+| Status | Message |
+|--------|---------|
+| `404` | `User not found` |
+
+---
+
+## POST /api/auth/reset-password
+
+Set a new password using the token received by email. The token must not be expired.
+
+**Auth:** None
+
+### Request body
+
+<ParamField body="token" type="string" required>
+  The password-reset token from the email link (`resetPasswordToken` field).
+</ParamField>
+
+<ParamField body="newPassword" type="string" required>
+  The new plain-text password to set.
+</ParamField>
+
+### Response `200`
+
+```json
+{ "message": "Password has been updated" }
+```
+
+### Example
+
+```bash
+curl -X POST https://canaccesible.es/api/auth/reset-password \
+  -H "Content-Type: application/json" \
+  -d '{"token": "a3f9d...", "newPassword": "NewP@ssw0rd"}'
+```
+
+### Errors
+
+| Status | Message |
+|--------|---------|
+| `400` | `Password reset token is invalid or has expired` |
+
+---
+
+## POST /api/auth/change-password
+
+Change the password for the currently authenticated user. Requires the existing password to be confirmed.
+
+**Auth:** `verifyToken` — `Authorization: Bearer <token>`
+
+### Request body
+
+<ParamField body="currentPassword" type="string" required>
+  The user's current password for verification.
+</ParamField>
+
+<ParamField body="newPassword" type="string" required>
+  The desired new password.
+</ParamField>
+
+### Response `200`
+
+```json
+{ "message": "Password updated successfully" }
+```
+
+### Example
+
+```bash
+curl -X POST https://canaccesible.es/api/auth/change-password \
+  -H "Authorization: Bearer eyJhbGci..." \
+  -H "Content-Type: application/json" \
+  -d '{"currentPassword": "OldPass1", "newPassword": "NewPass2"}'
+```
+
+### Errors
+
+| Status | Message |
+|--------|---------|
+| `400` | `Invalid current password` |
+| `401` | `Invalid token.` |
+| `403` | `Token not provided.` |
+| `404` | `User not found` |
+
+---
+
+## GET /api/auth/me
+
+Return the profile of the currently authenticated user.
+
+**Auth:** `verifyToken` — `Authorization: Bearer <token>`
+
+### Response `200`
+
+<ResponseField name="id" type="integer">User ID.</ResponseField>
+<ResponseField name="email" type="string">Email address.</ResponseField>
+<ResponseField name="firstName" type="string">First name.</ResponseField>
+<ResponseField name="lastName" type="string">Last name.</ResponseField>
+<ResponseField name="roleId" type="integer">Numeric role ID (1 = usuario, 2 = admin, 3 = municipio).</ResponseField>
+<ResponseField name="role" type="string">Role string: `usuario`, `admin`, or `municipio`.</ResponseField>
+<ResponseField name="nameFile" type="string | null">URL of the user's profile image stored in object storage, or `null`.</ResponseField>
+
+### Example
+
+```bash
+curl https://canaccesible.es/api/auth/me \
+  -H "Authorization: Bearer eyJhbGci..."
+```
+
+```json
+{
+  "id": 42,
+  "email": "maria@example.com",
+  "firstName": "María",
+  "lastName": "González",
+  "roleId": 1,
+  "role": "usuario",
+  "nameFile": "https://cdn.canaccesible.es/users/avatar-42.jpg"
+}
+```
+
+### Errors
+
+| Status | Message |
+|--------|---------|
+| `401` | `Invalid token.` |
+| `403` | `Token not provided.` |
+| `404` | `User not found` |

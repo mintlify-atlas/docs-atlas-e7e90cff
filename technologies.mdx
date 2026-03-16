@@ -1,0 +1,198 @@
+---
+title: "Technologies"
+description: "Full overview of every technology, library, and external service used in CanAccesible, grouped by category."
+---
+
+CanAccesible is built with a modern full-stack JavaScript architecture. The sections below describe every technology used, organized by layer.
+
+## Frontend
+
+<CardGroup cols={2}>
+  <Card title="React 19" icon="react">
+    Main library for building the component-based user interface. The frontend is a Single Page Application (SPA) served by Vite.
+  </Card>
+  <Card title="Vite 7" icon="bolt">
+    Fast build tool and development server. Bundles the React application and powers the local dev environment with HMR.
+  </Card>
+  <Card title="TailwindCSS 4" icon="paintbrush">
+    Utility-first CSS framework for rapidly designing custom components directly in JSX without leaving your markup.
+  </Card>
+  <Card title="Zustand 5" icon="database">
+    Lightweight and fast library for global application state management — authenticated user, preferences, and more.
+  </Card>
+  <Card title="React Router DOM 7" icon="route">
+    Handles client-side routing, allowing navigation between views without full page reloads.
+  </Card>
+  <Card title="Axios 1" icon="arrow-right-arrow-left">
+    Promise-based HTTP client for making requests to the backend API.
+  </Card>
+  <Card title="Socket.io Client 4" icon="plug">
+    Client-side library for establishing the real-time WebSocket connection to the backend Socket.io server.
+  </Card>
+  <Card title="Leaflet 1.9 & React Leaflet 5" icon="map">
+    Libraries for displaying the interactive incident map with geolocation pins across the Canary Islands.
+  </Card>
+  <Card title="react-i18next 16" icon="language">
+    Internationalization library for React. Manages pre-defined Spanish/English translations stored in `public/locales/{lang}/translation.json`.
+  </Card>
+  <Card title="Motion 12" icon="sparkles">
+    Animation library for React (formerly Framer Motion) for smooth transitions and visual effects throughout the UI.
+  </Card>
+  <Card title="Headless UI 2" icon="layout-grid">
+    Unstyled, fully accessible UI components (modals, dropdowns, transitions) designed to integrate with Tailwind CSS.
+  </Card>
+  <Card title="React Toastify 11" icon="bell">
+    Library for displaying toast notification popups to provide user feedback (success, error, warning).
+  </Card>
+  <Card title="MUI 7 & Lucide React" icon="shapes">
+    MUI provides Material Design components for complex UI elements. Lucide React supplies SVG icon sets.
+  </Card>
+  <Card title="Embla Carousel 8" icon="images">
+    Lightweight, extensible carousel library used for image galleries on incident and blog pages.
+  </Card>
+  <Card title="React Helmet Async 2" icon="code">
+    Manages dynamic changes to `<head>` (title, meta tags) for SEO and accessibility.
+  </Card>
+  <Card title="jwt-decode 4" icon="key">
+    Client-side utility for decoding JWT tokens to read user identity and role without a server round-trip.
+  </Card>
+</CardGroup>
+
+## Backend
+
+<CardGroup cols={2}>
+  <Card title="Node.js" icon="server">
+    Runtime environment for JavaScript on the server. The backend is structured with controllers, services, and models.
+  </Card>
+  <Card title="Express 5" icon="terminal">
+    Web framework for handling REST API routes, middlewares, and server logic. Runs on port `85`.
+  </Card>
+  <Card title="Sequelize 6" icon="table">
+    ORM for Node.js. Abstracts all MySQL interactions through typed models instead of raw SQL queries.
+  </Card>
+  <Card title="Socket.io 4" icon="plug">
+    Library enabling real-time, bidirectional event-based communication between client and server for live chat and notifications.
+  </Card>
+  <Card title="Multer 2 & Multer S3" icon="upload">
+    Middleware for handling `multipart/form-data` file uploads. Multer S3 streams files directly to DigitalOcean Spaces.
+  </Card>
+  <Card title="Resend 6.7" icon="mail">
+    Email API platform for sending transactional emails such as welcome messages and password resets.
+  </Card>
+  <Card title="web-push 3" icon="bell">
+    Server-side library for delivering Web Push notifications to subscribed browsers using VAPID authentication.
+  </Card>
+  <Card title="jsonwebtoken 9" icon="lock">
+    Issues and validates JWT tokens for stateless user authentication on protected API routes.
+  </Card>
+  <Card title="express-session 1 & connect-session-sequelize 8" icon="clock">
+    Server-side session management with Sequelize-backed persistence in the `Sessions` MySQL table.
+  </Card>
+  <Card title="ldapjs 3" icon="user-check">
+    Node.js client library for interacting with the OpenLDAP server for user authentication and directory operations.
+  </Card>
+  <Card title="bcrypt 6" icon="shield">
+    Password hashing library for secure credential storage.
+  </Card>
+  <Card title="EJS 3" icon="file-code">
+    Template engine used to render the admin dashboard views server-side.
+  </Card>
+  <Card title="swagger-ui-express 5" icon="book-open">
+    Middleware that auto-generates and serves interactive API documentation at `/api-docs`.
+  </Card>
+  <Card title="node-cron 4" icon="calendar">
+    Schedules recurring background tasks such as log cleanup.
+  </Card>
+  <Card title="dotenv 17" icon="file">
+    Loads environment variables from `.env` files to keep secrets out of source code.
+  </Card>
+  <Card title="Axios 1 (backend)" icon="arrow-right-arrow-left">
+    Used by the backend to call external APIs such as Nominatim for reverse geocoding.
+  </Card>
+</CardGroup>
+
+## Database & auth
+
+<CardGroup cols={2}>
+  <Card title="MySQL 8" icon="database">
+    Relational database management system that persists all platform data — users, incidents, comments, logs, and more.
+  </Card>
+  <Card title="mysql2 3" icon="database">
+    Node.js MySQL driver used by Sequelize for low-level database connectivity.
+  </Card>
+  <Card title="OpenLDAP" icon="user-check">
+    Directory service for centralized user authentication and management. Passwords are hashed with SSHA (Salted SHA).
+  </Card>
+  <Card title="JWT (stateless auth)" icon="key">
+    Tokens are issued on login and validated on each protected request. No server-side state required.
+  </Card>
+  <Card title="Sessions (stateful auth)" icon="clock">
+    Server-side session management using `express-session` with a Sequelize store for database persistence.
+  </Card>
+  <Card title="AWS SDK / DigitalOcean Spaces" icon="cloud">
+    `@aws-sdk/client-s3` v3 is used to upload user images (incidents, avatars) to DigitalOcean Spaces via the S3-compatible API.
+  </Card>
+</CardGroup>
+
+## DevOps & infrastructure
+
+<CardGroup cols={2}>
+  <Card title="Docker & Docker Compose" icon="box">
+    Used to run the OpenLDAP server in an isolated container during development. The `docker-compose.yml` mounts LDIF bootstrap data and persists directory data in named volumes.
+  </Card>
+  <Card title="Nginx" icon="server">
+    High-performance reverse proxy that routes traffic to the React static build and the Express API, and handles SSL termination.
+  </Card>
+  <Card title="DigitalOcean Droplet" icon="cloud">
+    Virtual Private Server (VPS) hosting both the backend API and the built frontend application in production.
+  </Card>
+  <Card title="DigitalOcean Managed Databases" icon="database">
+    Managed MySQL service providing high availability for the production database.
+  </Card>
+  <Card title="DigitalOcean Spaces" icon="hard-drive">
+    S3-compatible object storage for user-uploaded images (incident photos, profile pictures).
+  </Card>
+  <Card title="Let's Encrypt & Certbot" icon="shield-check">
+    Free TLS certificates obtained and auto-renewed by Certbot for HTTPS on `canaccesible.es`.
+  </Card>
+  <Card title="Nominalia" icon="globe">
+    Domain registrar for the `canaccesible.es` domain.
+  </Card>
+  <Card title="Git & GitHub" icon="git-branch">
+    Distributed version control and repository hosting. The team follows a simplified Gitflow branching strategy.
+  </Card>
+</CardGroup>
+
+## Testing
+
+<CardGroup cols={2}>
+  <Card title="Vitest 4" icon="flask-conical">
+    Blazing-fast unit test framework powered by Vite. Used for all frontend tests.
+  </Card>
+  <Card title="React Testing Library 16" icon="test-tube">
+    Lightweight solution for testing React components by simulating real user interactions.
+  </Card>
+  <Card title="Jest 29" icon="flask-conical">
+    JavaScript testing framework used for all backend tests.
+  </Card>
+  <Card title="Supertest 7" icon="arrow-right-arrow-left">
+    Library for testing HTTP servers with a fluent API — used to test Express endpoints directly.
+  </Card>
+  <Card title="JSDOM 27" icon="monitor">
+    DOM implementation for Node.js, allowing component tests to run without a real browser.
+  </Card>
+  <Card title="cross-env 10" icon="terminal">
+    Sets `NODE_ENV` and other environment variables consistently across Windows and Linux in test scripts.
+  </Card>
+</CardGroup>
+
+## External APIs
+
+<CardGroup cols={2}>
+  <Card title="Nominatim API (OpenStreetMap)" icon="map-pin">
+    Used in the backend for reverse geocoding — converts GPS coordinates submitted with an incident into a human-readable address.
+  </Card>
+  <Card title="MyMemory API" icon="languages">
+    Used in the frontend for on-demand translation of dynamic user-generated content (blog titles, descriptions) from Spanish to English.
+  </Card>
+</CardGroup>
